@@ -9,6 +9,9 @@ use winit::{
     window::WindowBuilder,
 };
 
+mod generation;
+mod shader_gen;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
