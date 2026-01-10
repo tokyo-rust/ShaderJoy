@@ -10,6 +10,8 @@ pub struct ShaderGenConfig {
     pub word_bank: Option<Vec<String>>,
     /// Percentage of words to freeze (keep unchanged) when mutating from a parent (0.0 to 1.0)
     pub frozen_word_ratio: f64,
+    /// Multiplier for the number of shaders to generate to ensure we get enough valid ones (e.g. 1.5 means generate 50% more)
+    pub over_subscribe: f64,
     /// The parent shader to use as a base for the generated shader
     pub parent_shader: Option<String>,
     /// LLM provider configuration
@@ -23,6 +25,7 @@ impl Default for ShaderGenConfig {
             prompt_template: DEFAULT_PROMPT_TEMPLATE.to_string(),
             word_bank: None,
             frozen_word_ratio: 0.85,
+            over_subscribe: 1.5,
             parent_shader: None,
             llm: LlmConfig::default(),
         }

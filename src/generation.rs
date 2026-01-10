@@ -83,9 +83,13 @@ pub async fn generate_specimens(
     config: &ShaderGenConfig,
 ) -> Vec<Result<Specimen>> {
     let generation_num = parent.as_ref().map_or(1, |p| p.generation + 1);
-    println!("Starting generation step. Permutations: {}", permutation_cnt);
+    let total_tasks = (permutation_cnt as f64 * config.over_subscribe).ceil() as usize;
+    println!(
+        "Starting generation step. Permutations: {}, Over-subscribe: {}, Total tasks: {}",
+        permutation_cnt, config.over_subscribe, total_tasks
+    );
 
-    let mut tasks = Vec::with_capacity(permutation_cnt);
+    let mut tasks = Vec::with_capacity(total_tasks);
 
     let base_words = {
         let mut rng = rand::rng();
@@ -102,7 +106,7 @@ pub async fn generate_specimens(
 
     {
         let mut rng = rand::rng();
-        for i in 0..permutation_cnt {
+        for i in 0..total_tasks {
             let (prompt_words, parent_shader) = if let Some(ref parent) = parent {
                 let words_to_freeze = ((config.prompt_word_count as f64 * config.frozen_word_ratio)
                     .round() as usize)
@@ -132,7 +136,7 @@ pub async fn generate_specimens(
             println!(
                 "Spawning generation task {}/{} with words: {:?}",
                 i + 1,
-                permutation_cnt,
+                total_tasks,
                 prompt_words
             );
 
@@ -155,24 +159,47 @@ pub async fn generate_specimens(
 
     println!("All tasks spawned. Awaiting results...");
 
-    let mut results = Vec::with_capacity(permutation_cnt);
+    let mut valid_results = Vec::new();
+    let mut errors = Vec::new();
+
     for (i, task) in tasks.into_iter().enumerate() {
         match task.await {
             Ok(result) => {
                 println!("Task {} finished.", i + 1);
-                results.push(result)
+                match result {
+                    Ok(specimen) => valid_results.push(Ok(specimen)),
+                    Err(e) => errors.push(Err(e)),
+                }
             }
             Err(e) => {
                 println!("Task {} failed join: {:?}", i + 1, e);
-                results.push(Err(crate::shader_gen::error::ShaderGenError::LlmError(
+                errors.push(Err(crate::shader_gen::error::ShaderGenError::LlmError(
                     e.to_string(),
                 )))
             }
         }
     }
 
-    println!("Generation step complete.");
-    results
+    println!(
+        "Generation step complete. Total: {}, Valid: {}, Errors: {}",
+        total_tasks,
+        valid_results.len(),
+        errors.len()
+    );
+
+    // Combine valid results first, then errors if we need to fill up to permutation_cnt
+    let mut final_results = valid_results;
+    if final_results.len() < permutation_cnt {
+        // Append errors to fill the gap if needed, or just return what we have
+        let needed = permutation_cnt - final_results.len();
+        final_results.extend(errors.into_iter().take(needed));
+    } else {
+        // Truncate if we have too many valid ones (though we might want to keep them?)
+        // For now, let's just take the first permutation_cnt valid ones
+        final_results.truncate(permutation_cnt);
+    }
+
+    final_results
 }
 
 #[cfg(test)]

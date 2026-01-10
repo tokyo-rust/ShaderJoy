@@ -3,6 +3,7 @@ pub mod error;
 
 use config::{LlmProvider, ShaderGenConfig};
 use error::{Result, ShaderGenError};
+use std::time::Instant;
 use llm::{
     builder::{LLMBackend, LLMBuilder},
     chat::ChatMessage,
@@ -80,11 +81,12 @@ pub async fn generate(config: &ShaderGenConfig, words: &[String]) -> Result<Stri
     let messages = vec![ChatMessage::user().content(&prompt).build()];
 
     println!("Sending request to LLM for words: {:?}", words);
+    let start = Instant::now();
     let response = llm
         .chat(&messages)
         .await
         .map_err(|e| ShaderGenError::LlmError(e.to_string()))?;
-    println!("Received response from LLM for words: {:?}", words);
+    println!("Received response from LLM for words: {:?} (took {:.2?})", words, start.elapsed());
 
     let text = response
         .text()
