@@ -1,0 +1,10 @@
+[package]
+name = "local-shader-toy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = { version = "1.16", features = ["derive"] }
+pollster = "0.3"
+wgpu = "0.20"
+winit = "0.29"
