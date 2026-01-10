@@ -152,10 +152,10 @@ impl Default for LlmConfig {
     fn default() -> Self {
         Self {
             provider: LlmProvider::Gemini,
-            model: Some("gemini-3-flash-preview".to_string()),
+            model: Some("gemini-3-flash-preview".to_string()), //model: Some("gemini-3-pro-preview".to_string()),
             api_key_env_var: "GOOGLE_API_KEY".to_string(),
             temperature: 0.8,
-            max_tokens: 100_000,
+            max_tokens: 20000,
             system_prompt: None,
         }
     }

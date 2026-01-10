@@ -146,7 +146,7 @@ pub async fn generate_specimens(
             };
             let words = prompt_words.clone();
             let task = tokio::spawn(async move {
-                let code = generate_with_retry(&config, &words, 3).await?;
+                let code = generate_with_retry(&config, &words, 1).await?;
                 Ok(Specimen {
                     code,
                     prompt_words: words,
