@@ -1,13 +1,13 @@
 use std::borrow::Cow;
+use std::fs;
+use std::sync::Arc;
 use std::time::Instant;
 use winit::{
-    event::{Event, WindowEvent, ElementState, KeyEvent},
+    event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
-    window::WindowBuilder,
     keyboard::{KeyCode, PhysicalKey},
+    window::WindowBuilder,
 };
-use std::sync::Arc;
-use std::fs;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -64,12 +64,18 @@ impl State {
             ..Default::default()
         });
         let surface = instance.create_surface(window.clone()).unwrap();
-        let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
-            compatible_surface: Some(&surface),
-            ..Default::default()
-        }).await.unwrap();
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                compatible_surface: Some(&surface),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
-        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor::default(), None).await.unwrap();
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .await
+            .unwrap();
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats[0];
@@ -122,7 +128,11 @@ impl State {
         }
 
         Self {
-            surface, device, queue, config, size,
+            surface,
+            device,
+            queue,
+            config,
+            size,
             components,
             bind_group_layout,
             start_time: Instant::now(),
@@ -265,13 +275,16 @@ impl State {
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&Default::default());
         let mut encoder = self.device.create_command_encoder(&Default::default());
-        
+
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 ..Default::default()
             });
@@ -299,21 +312,65 @@ impl State {
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();
-    let window = Arc::new(WindowBuilder::new().with_inner_size(winit::dpi::PhysicalSize::new(800, 600)).build(&event_loop).unwrap());
+    let window = Arc::new(
+        WindowBuilder::new()
+            .with_title("Pick a Shader That Sparks Joy")
+            .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
+            .build(&event_loop)
+            .unwrap(),
+    );
     let mut state = pollster::block_on(State::new(window.clone()));
 
-    event_loop.run(move |event, elwt| match event {
-        Event::WindowEvent { event, .. } => match event {
-            WindowEvent::CloseRequested => elwt.exit(),
-            WindowEvent::Resized(s) => { state.size = s; state.config.width = s.width; state.config.height = s.height; state.surface.configure(&state.device, &state.config); }
-            WindowEvent::CursorMoved { position, .. } => { state.mouse_pos = (position.x as f32, position.y as f32); }
-            WindowEvent::MouseInput { state: s, button: winit::event::MouseButton::Left, .. } => { state.mouse_pressed = s == ElementState::Pressed; }
-            WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(KeyCode::KeyR), state: ElementState::Pressed, .. }, .. } => state.reload_shader(),
-            WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(KeyCode::KeyF), state: ElementState::Pressed, .. }, .. } => { state.fade_start_time = Some(Instant::now()); },
-            WindowEvent::RedrawRequested => { state.update(); if let Err(e) = state.render() { eprintln!("{:?}", e); } }
+    event_loop
+        .run(move |event, elwt| match event {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => elwt.exit(),
+                WindowEvent::Resized(s) => {
+                    state.size = s;
+                    state.config.width = s.width;
+                    state.config.height = s.height;
+                    state.surface.configure(&state.device, &state.config);
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    state.mouse_pos = (position.x as f32, position.y as f32);
+                }
+                WindowEvent::MouseInput {
+                    state: s,
+                    button: winit::event::MouseButton::Left,
+                    ..
+                } => {
+                    state.mouse_pressed = s == ElementState::Pressed;
+                }
+                WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyR),
+                            state: ElementState::Pressed,
+                            ..
+                        },
+                    ..
+                } => state.reload_shader(),
+                WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyF),
+                            state: ElementState::Pressed,
+                            ..
+                        },
+                    ..
+                } => {
+                    state.fade_start_time = Some(Instant::now());
+                }
+                WindowEvent::RedrawRequested => {
+                    state.update();
+                    if let Err(e) = state.render() {
+                        eprintln!("{:?}", e);
+                    }
+                }
+                _ => {}
+            },
+            Event::AboutToWait => window.request_redraw(),
             _ => {}
-        },
-        Event::AboutToWait => window.request_redraw(),
-        _ => {}
-    }).unwrap();
+        })
+        .unwrap();
 }
