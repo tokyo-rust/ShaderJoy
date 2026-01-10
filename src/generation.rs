@@ -84,19 +84,21 @@ pub async fn generate_specimens(
 
     let mut tasks = Vec::with_capacity(permutation_cnt);
 
-    let mut rng = rand::rng();
-
-    let base_words = if parent.is_none() {
-        Some(
-            (0..config.prompt_word_count)
-                .map(|_| random_prompt_word(&mut rng, config.word_bank.as_deref()))
-                .collect::<Vec<String>>(),
-        )
-    } else {
-        None
+    let base_words = {
+        let mut rng = rand::rng();
+        if parent.is_none() {
+            Some(
+                (0..config.prompt_word_count)
+                    .map(|_| random_prompt_word(&mut rng, config.word_bank.as_deref()))
+                    .collect::<Vec<String>>(),
+            )
+        } else {
+            None
+        }
     };
 
     {
+        let mut rng = rand::rng();
         for i in 0..permutation_cnt {
             let prompt_words = if let Some(ref parent) = parent {
                 let words_to_freeze =
