@@ -9,8 +9,9 @@ use winit::{
     window::WindowBuilder,
 };
 
-use crate::generation::Generation;
+use crate::generation::{generate_specimens, Generation, Specimen};
 use crate::shader_gen::config::ShaderGenConfig;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 mod generation;
 mod shader_gen;
@@ -69,10 +70,15 @@ struct State {
     grid_rows: u32,
     generation: Generation,
     shader_config: ShaderGenConfig,
+    generation_rx: UnboundedReceiver<Vec<Specimen>>,
+    generation_tx: UnboundedSender<Vec<Specimen>>,
+    is_generating: bool,
+    rt_handle: tokio::runtime::Handle,
 }
 
 impl State {
     async fn new(window: Arc<winit::window::Window>) -> State {
+        let rt_handle = tokio::runtime::Handle::current();
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -221,6 +227,8 @@ impl State {
         );
         let egui_renderer = egui_wgpu::Renderer::new(&device, format, None, 1);
 
+        let (generation_tx, generation_rx) = tokio::sync::mpsc::unbounded_channel();
+
         let mut state = Self {
             surface,
             device,
@@ -243,6 +251,10 @@ impl State {
             grid_rows: 3,
             generation: Generation::new(),
             shader_config: ShaderGenConfig::default(),
+            generation_rx,
+            generation_tx,
+            is_generating: false,
+            rt_handle,
         };
 
         state
@@ -393,6 +405,53 @@ impl State {
         }
     }
 
+    fn handle_mouse_click(&mut self) {
+        if self.is_generating {
+            println!("Generation already in progress, ignoring click.");
+            return;
+        }
+
+        let mx = self.mouse_pos.0 / self.config.width as f32;
+        let my = self.mouse_pos.1 / self.config.height as f32;
+
+        let mut clicked_index = None;
+
+        for (i, comp) in self.components.iter().enumerate() {
+            if mx >= comp.rect.x
+                && mx <= comp.rect.x + comp.rect.w
+                && my >= comp.rect.y
+                && my <= comp.rect.y + comp.rect.h
+            {
+                clicked_index = Some(i);
+                break;
+            }
+        }
+
+        if let Some(index) = clicked_index {
+            if index < self.generation.current.len() {
+                println!("Tile {} clicked. Starting evolution...", index);
+                let parent = self.generation.current[index].clone();
+                let count = (self.grid_cols * self.grid_rows) as usize;
+                let config = self.shader_config.clone();
+                let tx = self.generation_tx.clone();
+
+                self.is_generating = true;
+
+                self.rt_handle.spawn(async move {
+                    let results = generate_specimens(Some(parent), count, &config).await;
+                    let valid: Vec<Specimen> = results
+                        .into_iter()
+                        .filter_map(|r| r.ok())
+                        .collect();
+                    
+                    if let Err(e) = tx.send(valid) {
+                        eprintln!("Failed to send generation results: {}", e);
+                    }
+                });
+            }
+        }
+    }
+
     fn reload_shader(&mut self) {
         println!("Reloading shaders...");
         self.rebuild_components();
@@ -438,6 +497,18 @@ impl State {
     }
 
     fn update(&mut self) {
+        // Check for new generation results
+        if let Ok(new_specimens) = self.generation_rx.try_recv() {
+            if !new_specimens.is_empty() {
+                println!("New generation received. Updating grid.");
+                self.generation.advance(new_specimens);
+                self.rebuild_components();
+            } else {
+                println!("Generation produced no valid specimens.");
+            }
+            self.is_generating = false;
+        }
+
         let global_uniforms = Uniforms {
             time: self.start_time.elapsed().as_secs_f32(),
             width: self.size.width as f32,
@@ -638,6 +709,9 @@ fn main() {
                         ..
                     } => {
                         state.mouse_pressed = s == ElementState::Pressed;
+                        if state.mouse_pressed {
+                            state.handle_mouse_click();
+                        }
                     }
                     WindowEvent::KeyboardInput {
                         event:

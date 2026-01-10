@@ -4,7 +4,7 @@ use crate::shader_gen::generate_with_retry;
 use rand::prelude::IndexedRandom;
 use random_word::Lang;
 
-fn random_prompt_word() -> String {
+pub fn random_prompt_word() -> String {
     random_word::r#gen(Lang::En).to_string()
 }
 
@@ -34,18 +34,18 @@ impl Generation {
         }
     }
 
-    pub async fn go_forward(&mut self, index: usize, config: &ShaderGenConfig) {
-        let Some(parent) = self.current.get(index).cloned() else {
-            return;
-        };
-        self.generate(Some(parent), 25, config).await; //GOAT, should be grid size - 1
-    }
-
     pub fn go_back(&mut self) {
         let Some(parent) = self.lineage.pop() else {
             return;
         };
         self.current = parent;
+    }
+
+    pub fn advance(&mut self, new_specimens: Vec<Specimen>) {
+        let mut old_current = vec![];
+        std::mem::swap(&mut old_current, &mut self.current);
+        self.lineage.push(old_current);
+        self.current = new_specimens;
     }
 
     pub async fn generate(
@@ -54,27 +54,41 @@ impl Generation {
         permutation_cnt: usize,
         config: &ShaderGenConfig,
     ) -> Vec<Result<Specimen>> {
-        let mut current = vec![];
-        std::mem::swap(&mut current, &mut self.current);
-        self.lineage.push(current);
+        let results = generate_specimens(parent, permutation_cnt, config).await;
 
+        let valid_specimens: Vec<Specimen> = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok().cloned())
+            .collect();
+
+        self.advance(valid_specimens);
+
+        results
+    }
+}
+
+pub async fn generate_specimens(
+    parent: Option<Specimen>,
+    permutation_cnt: usize,
+    config: &ShaderGenConfig,
+) -> Vec<Result<Specimen>> {
+    let generation_num = parent.as_ref().map_or(1, |p| p.generation + 1);
+    println!("Starting generation step. Permutations: {}", permutation_cnt);
+
+    let mut tasks = Vec::with_capacity(permutation_cnt);
+
+    let base_words = if parent.is_none() {
+        Some(
+            (0..config.prompt_word_count)
+                .map(|_| random_prompt_word())
+                .collect::<Vec<String>>(),
+        )
+    } else {
+        None
+    };
+
+    {
         let mut rng = rand::rng();
-
-        let generation_num = parent.as_ref().map_or(1, |p| p.generation + 1);
-        println!("Starting generation step. Permutations: {}", permutation_cnt);
-
-        let mut tasks = Vec::with_capacity(permutation_cnt);
-
-        let base_words = if parent.is_none() {
-            Some(
-                (0..config.prompt_word_count)
-                    .map(|_| random_prompt_word())
-                    .collect::<Vec<String>>(),
-            )
-        } else {
-            None
-        };
-
         for i in 0..permutation_cnt {
             let prompt_words = if let Some(ref parent) = parent {
                 let words_to_freeze =
@@ -115,32 +129,26 @@ impl Generation {
             });
             tasks.push(task);
         }
+    }
 
-        println!("All tasks spawned. Awaiting results...");
+    println!("All tasks spawned. Awaiting results...");
 
-        let mut results = Vec::with_capacity(permutation_cnt);
-        for (i, task) in tasks.into_iter().enumerate() {
-            match task.await {
-                Ok(result) => {
-                    println!("Task {} finished.", i + 1);
-                    results.push(result)
-                }
-                Err(e) => {
-                    println!("Task {} failed join: {:?}", i + 1, e);
-                    results.push(Err(crate::shader_gen::error::ShaderGenError::LlmError(
-                        e.to_string(),
-                    )))
-                }
+    let mut results = Vec::with_capacity(permutation_cnt);
+    for (i, task) in tasks.into_iter().enumerate() {
+        match task.await {
+            Ok(result) => {
+                println!("Task {} finished.", i + 1);
+                results.push(result)
+            }
+            Err(e) => {
+                println!("Task {} failed join: {:?}", i + 1, e);
+                results.push(Err(crate::shader_gen::error::ShaderGenError::LlmError(
+                    e.to_string(),
+                )))
             }
         }
-
-        println!("Generation step complete.");
-
-        self.current = results
-            .iter()
-            .filter_map(|r| r.as_ref().ok().cloned())
-            .collect();
-
-        results
     }
+
+    println!("Generation step complete.");
+    results
 }
