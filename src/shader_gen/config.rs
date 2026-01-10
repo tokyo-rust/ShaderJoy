@@ -8,6 +8,10 @@ pub struct ShaderGenConfig {
     pub prompt_template: String,
     /// Word bank to use, if any
     pub word_bank: Option<Vec<String>>,
+    /// Percentage of words to freeze (keep unchanged) when mutating from a parent (0.0 to 1.0)
+    pub frozen_word_ratio: f64,
+    /// The parent shader to use as a base for the generated shader
+    pub parent_shader: Option<String>,
     /// LLM provider configuration
     pub llm: LlmConfig,
 }
@@ -18,6 +22,8 @@ impl Default for ShaderGenConfig {
             prompt_word_count: 10,
             prompt_template: DEFAULT_PROMPT_TEMPLATE.to_string(),
             word_bank: None,
+            frozen_word_ratio: 0.85,
+            parent_shader: None,
             llm: LlmConfig::default(),
         }
     }
@@ -54,7 +60,11 @@ const SHADER_PROMPT_STRING: &str = r#"struct Uniforms {
 };
 
 @group(0) @binding(0)
-var<uniform> uniforms: Uniforms;"#;
+var<uniform> uniforms: Uniforms;
+
+Any code following is meant to be the "parent" of this shader and we're generating variants/spins on that and we changed some of the words prompted at the beginning of this prompt.
+{parent}
+"#;
 
 impl ShaderGenConfig {
     pub fn build_prompt(&self, words: &[String]) -> String {
@@ -64,6 +74,14 @@ impl ShaderGenConfig {
         self.prompt_template
             .replace("{words}", &words_str)
             .replace("{uniforms}", &uniforms_str)
+            .replace(
+                "{parent}",
+                &self
+                    .parent_shader
+                    .as_ref()
+                    .map(|s| format!("\n\n{parent}\n\n", parent = s))
+                    .unwrap_or_default(),
+            )
     }
 
     /// Set the LLM config

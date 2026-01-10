@@ -11,7 +11,10 @@ pub fn random_prompt_word(rng: &mut impl Rng, word_bank: Option<&[String]>) -> S
         words.choose(rng).map(|s| s.clone()).unwrap_or_default()
     } else {
         let all_words = random_word::all(Lang::En);
-        all_words.choose(rng).map(|s| s.to_string()).unwrap_or_default()
+        all_words
+            .choose(rng)
+            .map(|s| s.to_string())
+            .unwrap_or_default()
     }
 }
 
@@ -100,10 +103,11 @@ pub async fn generate_specimens(
     {
         let mut rng = rand::rng();
         for i in 0..permutation_cnt {
-            let prompt_words = if let Some(ref parent) = parent {
-                let words_to_freeze =
-                    config.prompt_word_count / 2usize.pow(parent.generation.min(10));
-                let words_to_freeze = words_to_freeze.max(1).min(parent.prompt_words.len());
+            let (prompt_words, parent_shader) = if let Some(ref parent) = parent {
+                let words_to_freeze = ((config.prompt_word_count as f64 * config.frozen_word_ratio)
+                    .round() as usize)
+                    .max(1)
+                    .min(parent.prompt_words.len());
 
                 let mut frozen: Vec<String> = parent
                     .prompt_words
@@ -115,9 +119,14 @@ pub async fn generate_specimens(
                 for _ in 0..new_word_count {
                     frozen.push(random_prompt_word(&mut rng, config.word_bank.as_deref()));
                 }
-                frozen
+                (frozen, parent.code.clone())
             } else {
-                base_words.clone().unwrap()
+                (
+                    (0..config.prompt_word_count)
+                        .map(|_| random_prompt_word(&mut rng, config.word_bank.as_deref()))
+                        .collect(),
+                    String::new(),
+                )
             };
 
             println!(
@@ -127,7 +136,10 @@ pub async fn generate_specimens(
                 prompt_words
             );
 
-            let config = config.clone();
+            let config = ShaderGenConfig {
+                parent_shader: Some(parent_shader),
+                ..config.clone()
+            };
             let words = prompt_words.clone();
             let task = tokio::spawn(async move {
                 let code = generate_with_retry(&config, &words, 3).await?;
