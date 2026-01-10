@@ -20,10 +20,26 @@ pub async fn generate_with_retry(
 ) -> Result<String> {
     let mut attempts = 0;
     let mut last_error = None;
+    println!(
+        "Generating shader for words: {:?} (max attempts: {})",
+        words, num_attempts
+    );
     while attempts < num_attempts {
+        if attempts > 0 {
+            println!(
+                "Retry attempt {}/{} for words: {:?}",
+                attempts + 1,
+                num_attempts,
+                words
+            );
+        }
         match generate(config, words).await {
-            Ok(shader) => return Ok(shader),
+            Ok(shader) => {
+                println!("Successfully generated shader for words: {:?}", words);
+                return Ok(shader);
+            }
             Err(e) => {
+                println!("Generation failed for words: {:?}. Error: {:?}", words, e);
                 attempts += 1;
                 last_error = Some(e);
             }
@@ -66,19 +82,43 @@ pub async fn generate(config: &ShaderGenConfig, words: &[String]) -> Result<Stri
     let prompt = config.build_prompt(words);
     let messages = vec![ChatMessage::user().content(&prompt).build()];
 
+    println!("Sending request to LLM for words: {:?}", words);
     let response = llm
         .chat(&messages)
         .await
         .map_err(|e| ShaderGenError::LlmError(e.to_string()))?;
+    println!("Received response from LLM for words: {:?}", words);
 
     let text = response
         .text()
         .ok_or_else(|| ShaderGenError::ParseError("No text in LLM response".to_string()))?;
 
-    let shader_code = extract_shader_code(&text);
+    let mut shader_code = extract_shader_code(&text);
+
+    // Append standard vertex shader if not present
+    if !shader_code.contains("vs_main") {
+        shader_code.push_str("\n\n");
+        shader_code.push_str(STANDARD_VERTEX_SHADER);
+    }
+
     validate_wgsl(&shader_code)?;
     Ok(shader_code)
 }
+
+const STANDARD_VERTEX_SHADER: &str = r#"
+@vertex
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
+    var p = vec2<f32>(0.0, 0.0);
+    if (in_vertex_index == 0u) {
+        p = vec2<f32>(-1.0, -1.0);
+    } else if (in_vertex_index == 1u) {
+        p = vec2<f32>(3.0, -1.0);
+    } else {
+        p = vec2<f32>(-1.0, 3.0);
+    }
+    return vec4<f32>(p, 0.0, 1.0);
+}
+"#;
 
 /// Generate a WGSL shader from string slices using the provided config.
 pub async fn generate_from_str(config: &ShaderGenConfig, words: &[&str]) -> Result<String> {

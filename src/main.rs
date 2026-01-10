@@ -9,6 +9,9 @@ use winit::{
     window::WindowBuilder,
 };
 
+use crate::generation::Generation;
+use crate::shader_gen::config::ShaderGenConfig;
+
 mod generation;
 mod shader_gen;
 
@@ -64,6 +67,8 @@ struct State {
     egui_renderer: egui_wgpu::Renderer,
     grid_cols: u32,
     grid_rows: u32,
+    generation: Generation,
+    shader_config: ShaderGenConfig,
 }
 
 impl State {
@@ -236,7 +241,18 @@ impl State {
             egui_renderer,
             grid_cols: 3,
             grid_rows: 3,
+            generation: Generation::new(),
+            shader_config: ShaderGenConfig::default(),
         };
+
+        state
+            .generation
+            .generate(
+                None,
+                (state.grid_cols * state.grid_rows) as usize,
+                &state.shader_config,
+            )
+            .await;
 
         state.rebuild_components();
         state
@@ -267,7 +283,8 @@ impl State {
         let offset_x = (screen_w - total_w) / 2.0 / screen_w;
         let offset_y = (screen_h - total_h) / 2.0 / screen_h;
 
-        let source_path = "src/shader.wgsl";
+        let fallback_source = include_str!("shader.wgsl").to_string();
+        let mut i = 0;
 
         for y in 0..rows {
             for x in 0..cols {
@@ -278,13 +295,24 @@ impl State {
                     h: step_y,
                 };
 
+                let (source_code, label) = if i < self.generation.current.len() {
+                    (
+                        self.generation.current[i].code.clone(),
+                        format!("Generated {}", i),
+                    )
+                } else {
+                    (fallback_source.clone(), "Fallback".to_string())
+                };
+
                 let component = self.create_component(
                     &self.bind_group_layout,
-                    source_path.to_string(),
+                    source_code,
+                    label,
                     rect,
                     1.0,
                 );
                 self.components.push(component);
+                i += 1;
             }
         }
     }
@@ -292,20 +320,16 @@ impl State {
     fn create_component(
         &self,
         layout: &wgpu::BindGroupLayout,
-        source: String,
+        source_code: String,
+        label: String,
         rect: Rect,
         opacity: f32,
     ) -> ShaderComponent {
-        let shader_source = fs::read_to_string(&source).unwrap_or_else(|_| {
-            println!("Failed to read {}, using fallback.", source);
-            include_str!("shader.wgsl").to_string()
-        });
-
         let shader = self
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(&source),
-                source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
+                label: Some(&label),
+                source: wgpu::ShaderSource::Wgsl(Cow::Owned(source_code)),
             });
 
         let pipeline_layout = self
@@ -318,7 +342,7 @@ impl State {
         let pipeline = self
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(&source),
+                label: Some(&label),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
@@ -344,7 +368,7 @@ impl State {
             });
 
         let uniform_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(&format!("Uniform Buffer {}", source)),
+            label: Some(&format!("Uniform Buffer {}", label)),
             size: std::mem::size_of::<Uniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -363,7 +387,7 @@ impl State {
             pipeline,
             uniform_buffer,
             bind_group,
-            source,
+            source: label,
             rect,
             opacity,
         }
@@ -372,9 +396,17 @@ impl State {
     fn reload_shader(&mut self) {
         println!("Reloading shaders...");
         self.rebuild_components();
+
+        let source_path = "src/starfield.wgsl";
+        let source_code = fs::read_to_string(source_path).unwrap_or_else(|_| {
+            println!("Failed to read {}, using fallback.", source_path);
+            include_str!("shader.wgsl").to_string()
+        });
+
         self.background_component = self.create_component(
             &self.bind_group_layout,
-            "src/starfield.wgsl".to_string(),
+            source_code,
+            source_path.to_string(),
             Rect {
                 x: 0.0,
                 y: 0.0,
@@ -574,7 +606,11 @@ fn main() {
             .build(&event_loop)
             .unwrap(),
     );
-    let mut state = pollster::block_on(State::new(window.clone()));
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let mut state = rt.block_on(State::new(window.clone()));
 
     event_loop
         .run(move |event, elwt| match event {

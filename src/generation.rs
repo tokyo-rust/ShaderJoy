@@ -11,7 +11,7 @@ fn random_prompt_word() -> String {
 /// A collection of current specimen and a lineage of parents.
 #[derive(Debug, Clone)]
 pub struct Generation {
-    current: Vec<Specimen>,
+    pub current: Vec<Specimen>,
     lineage: Vec<Vec<Specimen>>,
 }
 
@@ -19,11 +19,11 @@ pub struct Generation {
 #[derive(Debug, Clone)]
 pub struct Specimen {
     /// The shader code which is the result of the shader generation.
-    code: String,
+    pub code: String,
     /// The words which describe the latent space to prompt the LLM to generate shader.
-    prompt_words: Vec<String>,
+    pub prompt_words: Vec<String>,
     /// The generation of this parent starting from index 1 (0 implying there was no parent).
-    generation: u32,
+    pub generation: u32,
 }
 
 impl Generation {
@@ -61,10 +61,21 @@ impl Generation {
         let mut rng = rand::rng();
 
         let generation_num = parent.as_ref().map_or(1, |p| p.generation + 1);
+        println!("Starting generation step. Permutations: {}", permutation_cnt);
 
         let mut tasks = Vec::with_capacity(permutation_cnt);
 
-        for _ in 0..permutation_cnt {
+        let base_words = if parent.is_none() {
+            Some(
+                (0..config.prompt_word_count)
+                    .map(|_| random_prompt_word())
+                    .collect::<Vec<String>>(),
+            )
+        } else {
+            None
+        };
+
+        for i in 0..permutation_cnt {
             let prompt_words = if let Some(ref parent) = parent {
                 let words_to_freeze =
                     config.prompt_word_count / 2usize.pow(parent.generation.min(10));
@@ -82,10 +93,15 @@ impl Generation {
                 }
                 frozen
             } else {
-                (0..config.prompt_word_count)
-                    .map(|_| random_prompt_word())
-                    .collect()
+                base_words.clone().unwrap()
             };
+
+            println!(
+                "Spawning generation task {}/{} with words: {:?}",
+                i + 1,
+                permutation_cnt,
+                prompt_words
+            );
 
             let config = config.clone();
             let words = prompt_words.clone();
@@ -100,15 +116,25 @@ impl Generation {
             tasks.push(task);
         }
 
+        println!("All tasks spawned. Awaiting results...");
+
         let mut results = Vec::with_capacity(permutation_cnt);
-        for task in tasks {
+        for (i, task) in tasks.into_iter().enumerate() {
             match task.await {
-                Ok(result) => results.push(result),
-                Err(e) => results.push(Err(crate::shader_gen::error::ShaderGenError::LlmError(
-                    e.to_string(),
-                ))),
+                Ok(result) => {
+                    println!("Task {} finished.", i + 1);
+                    results.push(result)
+                }
+                Err(e) => {
+                    println!("Task {} failed join: {:?}", i + 1, e);
+                    results.push(Err(crate::shader_gen::error::ShaderGenError::LlmError(
+                        e.to_string(),
+                    )))
+                }
             }
         }
+
+        println!("Generation step complete.");
 
         self.current = results
             .iter()

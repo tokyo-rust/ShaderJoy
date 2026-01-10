@@ -20,11 +20,22 @@ impl Default for ShaderGenConfig {
     }
 }
 
-pub const DEFAULT_PROMPT_TEMPLATE: &str = r#"Generate an interesting shader that is encoded by the embedded representation of the following words: {words}.
+pub const DEFAULT_PROMPT_TEMPLATE: &str = r#"Generate an interesting WGSL fragment shader `fs_main` that is encoded by the embedded representation of the following words: {words}.
 
 The input uniforms for the shader are: {uniforms}
 
-This shader should be in WGSL format. Return ONLY the WGSL shader code, no explanations or markdown formatting."#;
+The vertex shader provides the following output, which is the input to your fragment shader:
+```wgsl
+@vertex
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32>
+```
+Your fragment shader should have the signature:
+```wgsl
+@fragment
+fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32>
+```
+
+Return ONLY the WGSL code for the fragment shader and any helper functions. Do NOT include the vertex shader. Do NOT include explanations or markdown formatting."#;
 
 // TODO: Generate this based on Uniforms and move that and other things to a shaders.rs module
 // https://docs.rs/bevy_reflect/latest/bevy_reflect/
@@ -117,10 +128,10 @@ impl Default for LlmConfig {
     fn default() -> Self {
         Self {
             provider: LlmProvider::Gemini,
-            model: Some("gemini-3-pro-preview".to_string()),
+            model: Some("gemini-3-flash-preview".to_string()),
             api_key_env_var: "GOOGLE_API_KEY".to_string(),
             temperature: 0.8,
-            max_tokens: 2 * 4096,
+            max_tokens: 100000,
             system_prompt: None,
         }
     }
