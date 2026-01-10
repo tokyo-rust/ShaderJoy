@@ -21,7 +21,7 @@ struct Uniforms {
     mouse_x: f32,
     mouse_y: f32,
     mouse_pressed: u32,
-    padding: f32,
+    opacity: f32,
 };
 
 @group(0) @binding(0)
@@ -49,5 +49,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         finalColor += col * d;
     }
 
-    return vec4<f32>(finalColor, 1.0);
+    return vec4<f32>(finalColor, uniforms.opacity);
 }

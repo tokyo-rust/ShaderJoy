@@ -21,7 +21,7 @@ struct Uniforms {
     mouse_x: f32,
     mouse_y: f32,
     mouse_pressed: u32,
-    padding: f32,
+    opacity: f32,
 };
 
 @group(0) @binding(0)
@@ -37,5 +37,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let d = length(uv);
     let col = vec3<f32>(sin(d * 20.0 - uniforms.time * 5.0), cos(d * 20.0 - uniforms.time * 5.0), sin(d * 10.0 + uniforms.time));
     
-    return vec4<f32>(col * 0.5 + 0.5, 1.0);
+    return vec4<f32>(col * 0.5 + 0.5, uniforms.opacity);
 }

@@ -19,7 +19,24 @@ struct Uniforms {
     mouse_x: f32,
     mouse_y: f32,
     mouse_pressed: u32,
-    padding: f32, 
+    opacity: f32, 
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Rect {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+}
+
+struct ShaderComponent {
+    pipeline: wgpu::RenderPipeline,
+    uniform_buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+    source: String,
+    rect: Rect,
+    opacity: f32,
 }
 
 struct State {
@@ -28,11 +45,10 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
-    pipelines: Vec<wgpu::RenderPipeline>,
-    uniform_buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
+    components: Vec<ShaderComponent>,
     bind_group_layout: wgpu::BindGroupLayout,
     start_time: Instant,
+    fade_start_time: Option<Instant>,
     frame_count: u32,
     mouse_pos: (f32, f32),
     mouse_pressed: bool,
@@ -80,68 +96,37 @@ impl State {
                 },
                 count: None,
             }],
-            label: None,
+            label: Some("uniform_bind_group_layout"),
         });
 
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Uniform Buffer"),
-            size: std::mem::size_of::<Uniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        // Initialize components
+        let shader_defs = [
+            ("src/shader.wgsl", Rect { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, 1.0),
+            ("src/twinkley.wgsl", Rect { x: 0.5, y: 0.0, w: 0.5, h: 0.5 }, 1.0),
+            ("src/shader3.wgsl", Rect { x: 0.0, y: 0.5, w: 0.5, h: 0.5 }, 1.0),
+            ("src/shader4.wgsl", Rect { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, 1.0),
+        ];
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-            label: None,
-        });
+        let mut components = Vec::new();
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&bind_group_layout],
-            ..Default::default()
-        });
-
-        let shader_files = ["src/shader.wgsl", "src/twinkley.wgsl", "src/shader3.wgsl", "src/shader4.wgsl"];
-        let mut pipelines = Vec::new();
-
-        for file in shader_files {
-            let shader_source = fs::read_to_string(file).unwrap_or_else(|_| include_str!("shader.wgsl").to_string());
-            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(file),
-                source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
-            });
-
-            let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(file),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &[],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    targets: &[Some(config.format.into())],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            });
-            pipelines.push(pipeline);
+        for (source_path, rect, opacity) in shader_defs {
+            let component = Self::create_component(
+                &device, 
+                &config, 
+                &bind_group_layout, 
+                source_path.to_string(), 
+                rect, 
+                opacity
+            );
+            components.push(component);
         }
 
         Self {
             surface, device, queue, config, size,
-            pipelines,
-            uniform_buffer, bind_group, bind_group_layout,
+            components,
+            bind_group_layout,
             start_time: Instant::now(),
+            fade_start_time: None,
             frame_count: 0,
             mouse_pos: (0.0, 0.0),
             mouse_pressed: false,
@@ -149,56 +134,102 @@ impl State {
         }
     }
 
-    fn reload_shader(&mut self) {
-        let shader_files = ["src/shader.wgsl", "src/twinkley.wgsl", "src/shader3.wgsl", "src/shader4.wgsl"];
-        let mut new_pipelines = Vec::new();
+    fn create_component(
+        device: &wgpu::Device, 
+        config: &wgpu::SurfaceConfiguration, 
+        layout: &wgpu::BindGroupLayout, 
+        source: String, 
+        rect: Rect, 
+        opacity: f32
+    ) -> ShaderComponent {
+        let shader_source = fs::read_to_string(&source).unwrap_or_else(|_| {
+             println!("Failed to read {}, using fallback.", source);
+             include_str!("shader.wgsl").to_string()
+        });
+        
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(&source),
+            source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
+        });
 
-        let pipeline_layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&self.bind_group_layout],
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            bind_group_layouts: &[layout],
             ..Default::default()
         });
 
-        for file in shader_files {
-             // Fallback to shader.wgsl if read fails, or maybe just skip/log error. 
-             // Using unwrap_or_else to match original behavior roughly, but here we fallback to shader.wgsl content for all.
-             let shader_source = fs::read_to_string(file).unwrap_or_else(|_| {
-                 println!("Failed to read {}", file);
-                 include_str!("shader.wgsl").to_string()
-             });
-            
-            let shader = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(file),
-                source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
-            });
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(&source),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+        });
 
-            let pipeline = self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(file),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &[],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    targets: &[Some(self.config.format.into())],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            });
-            new_pipelines.push(pipeline);
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(&format!("Uniform Buffer {}", source)),
+            size: std::mem::size_of::<Uniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+            label: None,
+        });
+
+        ShaderComponent {
+            pipeline,
+            uniform_buffer,
+            bind_group,
+            source,
+            rect,
+            opacity,
         }
-        self.pipelines = new_pipelines;
+    }
+
+    fn reload_shader(&mut self) {
+        println!("Reloading shaders...");
+        let mut new_components = Vec::new();
+        
+        // Re-create components using existing properties
+        for old_comp in &self.components {
+             let component = Self::create_component(
+                &self.device, 
+                &self.config, 
+                &self.bind_group_layout, 
+                old_comp.source.clone(), 
+                old_comp.rect, 
+                old_comp.opacity
+            );
+            new_components.push(component);
+        }
+        self.components = new_components;
         println!("All shaders reloaded.");
     }
 
     fn update(&mut self) {
-        let uniforms = Uniforms {
+        let global_uniforms = Uniforms {
             time: self.start_time.elapsed().as_secs_f32(),
             width: self.size.width as f32,
             height: self.size.height as f32,
@@ -206,9 +237,27 @@ impl State {
             mouse_x: self.mouse_pos.0,
             mouse_y: self.mouse_pos.1,
             mouse_pressed: if self.mouse_pressed { 1 } else { 0 },
-            padding: 0.0,
+            opacity: 1.0, 
         };
-        self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+
+        let fade_factor = if let Some(start) = self.fade_start_time {
+            let elapsed = start.elapsed().as_secs_f32();
+            if elapsed < 1.0 {
+                1.0 - elapsed
+            } else {
+                self.fade_start_time = None; // Reset
+                1.0
+            }
+        } else {
+            1.0
+        };
+
+        for comp in &self.components {
+            let mut u = global_uniforms;
+            u.opacity = comp.opacity * fade_factor;
+            self.queue.write_buffer(&comp.uniform_buffer, 0, bytemuck::cast_slice(&[u]));
+        }
+        
         self.frame_count += 1;
     }
 
@@ -227,36 +276,19 @@ impl State {
                 ..Default::default()
             });
 
-            rpass.set_bind_group(0, &self.bind_group, &[]);
+            let screen_w = self.config.width as f32;
+            let screen_h = self.config.height as f32;
 
-            let w = self.config.width as f32;
-            let h = self.config.height as f32;
-            let half_w = w / 2.0;
-            let half_h = h / 2.0;
+            for comp in &self.components {
+                let x = comp.rect.x * screen_w;
+                let y = comp.rect.y * screen_h;
+                let w = comp.rect.w * screen_w;
+                let h = comp.rect.h * screen_h;
 
-            // Define viewports for 2x2 grid
-            // 0: Top-Left
-            // 1: Top-Right
-            // 2: Bottom-Left
-            // 3: Bottom-Right
-            // Note: WGPU coordinate system, (0,0) is usually top-left for viewports in most windowing systems, 
-            // but let's assume standard behavior. If y grows down (which it usually does in screen coords), 
-            // 0,0 is top-left.
-            
-            let viewports = [
-                (0.0, 0.0, half_w, half_h),         // Top-Left
-                (half_w, 0.0, half_w, half_h),      // Top-Right
-                (0.0, half_h, half_w, half_h),      // Bottom-Left
-                (half_w, half_h, half_w, half_h),   // Bottom-Right
-            ];
-
-            for (i, pipeline) in self.pipelines.iter().enumerate() {
-                if i < 4 {
-                    let (x, y, vw, vh) = viewports[i];
-                    rpass.set_viewport(x, y, vw, vh, 0.0, 1.0);
-                    rpass.set_pipeline(pipeline);
-                    rpass.draw(0..3, 0..1);
-                }
+                rpass.set_viewport(x, y, w, h, 0.0, 1.0);
+                rpass.set_pipeline(&comp.pipeline);
+                rpass.set_bind_group(0, &comp.bind_group, &[]);
+                rpass.draw(0..3, 0..1);
             }
         }
         self.queue.submit(Some(encoder.finish()));
@@ -277,6 +309,7 @@ fn main() {
             WindowEvent::CursorMoved { position, .. } => { state.mouse_pos = (position.x as f32, position.y as f32); }
             WindowEvent::MouseInput { state: s, button: winit::event::MouseButton::Left, .. } => { state.mouse_pressed = s == ElementState::Pressed; }
             WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(KeyCode::KeyR), state: ElementState::Pressed, .. }, .. } => state.reload_shader(),
+            WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(KeyCode::KeyF), state: ElementState::Pressed, .. }, .. } => { state.fade_start_time = Some(Instant::now()); },
             WindowEvent::RedrawRequested => { state.update(); if let Err(e) = state.render() { eprintln!("{:?}", e); } }
             _ => {}
         },
