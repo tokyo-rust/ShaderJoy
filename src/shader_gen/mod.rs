@@ -19,13 +19,19 @@ pub async fn generate_with_retry(
     num_attempts: usize,
 ) -> Result<String> {
     let mut attempts = 0;
+    let mut last_error = None;
     while attempts < num_attempts {
         match generate(config, words).await {
             Ok(shader) => return Ok(shader),
-            Err(_) => attempts += 1,
+            Err(e) => {
+                attempts += 1;
+                last_error = Some(e);
+            }
         }
     }
-    Err(ShaderGenError::LLMWgslGenerateError)
+    Err(ShaderGenError::LLMWgslGenerateError(Box::new(
+        last_error.unwrap(),
+    )))
 }
 
 /// Generate a WGSL shader from a list of words using the provided config.
@@ -103,7 +109,11 @@ pub fn validate_wgsl(code: &str) -> Result<()> {
 /// Extract shader code from LLM response, handling markdown fences
 fn extract_shader_code(text: &str) -> String {
     if let Some(start) = text.find("```wgsl") {
-        let code_start = start + 7;
+        let after_marker = start + 7;
+        let code_start = text[after_marker..]
+            .find('\n')
+            .map(|i| after_marker + i + 1)
+            .unwrap_or(after_marker);
         if let Some(end) = text[code_start..].find("```") {
             return text[code_start..code_start + end].trim().to_string();
         }
@@ -122,7 +132,141 @@ fn extract_shader_code(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
-    // TODO move this API key to .env
-    const GEMINI_API_KEY: &str = "AIzaSyDj1tXFtyRPu3URBdxkdKMQBisOLwfaRXM";
+    fn gemini_config() -> ShaderGenConfig {
+        ShaderGenConfig {
+            llm: LlmConfig {
+                provider: LlmProvider::Gemini,
+                model: Some("gemini-3-flash-preview".to_string()),
+                api_key_env_var: "GOOGLE_API_KEY".to_string(),
+                temperature: 0.7,
+                max_tokens: 100_000,
+                system_prompt: None,
+            },
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_simple_shader() {
+        if std::env::var("GOOGLE_API_KEY").is_err() {
+            panic!("GOOGLE_API_KEY not set");
+        }
+
+        let config = gemini_config();
+        let words = vec!["fire".to_string(), "waves".to_string()];
+
+        let result = generate(&config, &words).await;
+        match &result {
+            Ok(shader) => {
+                println!("\n=== Generated Shader (fire, waves) ===\n{}\n", shader);
+                assert!(!shader.is_empty());
+                assert!(shader.contains("@fragment") || shader.contains("fn "));
+            }
+            Err(e) => panic!("Failed to generate shader: {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_from_str() {
+        if std::env::var("GOOGLE_API_KEY").is_err() {
+            panic!("GOOGLE_API_KEY not set");
+        }
+
+        let config = gemini_config();
+        let result = generate_from_str(&config, &["ocean", "sunset"]).await;
+
+        match &result {
+            Ok(shader) => {
+                println!("\n=== Generated Shader (ocean, sunset) ===\n{}\n", shader);
+                assert!(!shader.is_empty());
+            }
+            Err(e) => panic!("Failed to generate shader: {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_with_defaults() {
+        if std::env::var("GOOGLE_API_KEY").is_err() {
+            panic!("GOOGLE_API_KEY not set");
+        }
+
+        let result = generate_with_defaults(&["plasma", "neon"]).await;
+
+        match &result {
+            Ok(shader) => {
+                println!("\n=== Generated Shader (plasma, neon) ===\n{}\n", shader);
+                assert!(!shader.is_empty());
+            }
+            Err(e) => panic!("Failed to generate shader: {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_abstract_concept() {
+        if std::env::var("GOOGLE_API_KEY").is_err() {
+            panic!("GOOGLE_API_KEY not set");
+        }
+
+        let config = gemini_config();
+        let words = vec!["tranquility".to_string(), "motion".to_string()];
+
+        let result = generate(&config, &words).await;
+        match &result {
+            Ok(shader) => {
+                println!(
+                    "\n=== Generated Shader (tranquility, motion) ===\n{}\n",
+                    shader
+                );
+                validate_wgsl(shader).expect("Generated shader should be valid WGSL");
+            }
+            Err(e) => panic!("Failed to generate shader: {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_validate_wgsl_valid() {
+        let valid_shader = r#"
+@fragment
+fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    return vec4<f32>(uv.x, uv.y, 0.0, 1.0);
+}
+"#;
+        assert!(validate_wgsl(valid_shader).is_ok());
+    }
+
+    #[test]
+    fn test_validate_wgsl_invalid() {
+        let invalid_shader = "this is not valid wgsl";
+        assert!(validate_wgsl(invalid_shader).is_err());
+    }
+
+    #[test]
+    fn test_extract_shader_code_markdown() {
+        let response = r#"Here's your shader:
+```wgsl
+@fragment
+fn main() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+}
+```
+Hope this helps!"#;
+
+        let extracted = extract_shader_code(response);
+        assert!(extracted.contains("@fragment"));
+        assert!(!extracted.contains("```"));
+        assert!(!extracted.contains("Hope this helps"));
+    }
+
+    #[test]
+    fn test_build_prompt() {
+        let config = ShaderGenConfig::default();
+        let words = vec!["fire".to_string(), "ice".to_string()];
+        let prompt = config.build_prompt(&words);
+
+        assert!(prompt.contains("fire, ice"));
+        assert!(prompt.contains("struct Uniforms"));
+        assert!(prompt.contains("WGSL"));
+    }
 }

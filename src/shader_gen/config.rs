@@ -29,6 +29,7 @@ The input uniforms for the shader are: {uniforms}
 This shader should be in WGSL format. Return ONLY the WGSL shader code, no explanations or markdown formatting."#;
 
 // TODO: Generate this based on Uniforms and move that and other things to a shaders.rs module
+// https://docs.rs/bevy_reflect/latest/bevy_reflect/
 const SHADER_PROMPT_STRING: &str = r#"struct Uniforms {
     time: f32,          // Elapsed seconds since app start
     width: f32,         // Render target width in pixels

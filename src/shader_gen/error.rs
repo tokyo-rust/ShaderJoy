@@ -20,8 +20,8 @@ pub enum ShaderGenError {
     #[error("WGSL validation error: {0}")]
     WgslValidationError(String),
 
-    #[error("LLM failed to generate valid wgsl shader")]
-    LLMWgslGenerateError
+    #[error("LLM failed to generate valid wgsl shader, last error: {0}")]
+    LLMWgslGenerateError(Box<ShaderGenError>),
 }
 
 pub type Result<T> = std::result::Result<T, ShaderGenError>;
