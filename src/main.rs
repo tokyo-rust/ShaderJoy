@@ -19,7 +19,7 @@ struct Uniforms {
     mouse_x: f32,
     mouse_y: f32,
     mouse_pressed: u32,
-    opacity: f32, 
+    opacity: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -54,7 +54,7 @@ struct State {
     mouse_pos: (f32, f32),
     mouse_pressed: bool,
     window: Arc<winit::window::Window>,
-    
+
     // Egui fields
     egui_ctx: egui::Context,
     egui_state: egui_winit::State,
@@ -113,19 +113,18 @@ impl State {
         });
 
         // Initialize helper to create components
-        let create_comp_helper = |
-            dev: &wgpu::Device,
-            conf: &wgpu::SurfaceConfiguration,
-            layout: &wgpu::BindGroupLayout, 
-            src: String, 
-            r: Rect, 
-            op: f32
-        | -> ShaderComponent {
+        let create_comp_helper = |dev: &wgpu::Device,
+                                  conf: &wgpu::SurfaceConfiguration,
+                                  layout: &wgpu::BindGroupLayout,
+                                  src: String,
+                                  r: Rect,
+                                  op: f32|
+         -> ShaderComponent {
             let shader_source = fs::read_to_string(&src).unwrap_or_else(|_| {
-                 println!("Failed to read {}, using fallback.", src);
-                 include_str!("shader.wgsl").to_string()
+                println!("Failed to read {}, using fallback.", src);
+                include_str!("shader.wgsl").to_string()
             });
-            
+
             let shader = dev.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some(&src),
                 source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
@@ -153,7 +152,10 @@ impl State {
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                 }),
-                primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
+                primitive: wgpu::PrimitiveState {
+                    cull_mode: None,
+                    ..Default::default()
+                },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
@@ -191,8 +193,13 @@ impl State {
             &config,
             &bind_group_layout,
             "src/starfield.wgsl".to_string(),
-            Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
-            1.0
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 1.0,
+                h: 1.0,
+            },
+            1.0,
         );
 
         // Egui initialization
@@ -224,10 +231,10 @@ impl State {
             egui_ctx,
             egui_state,
             egui_renderer,
-            grid_cols: 1, 
+            grid_cols: 1,
             grid_rows: 1,
         };
-        
+
         state.rebuild_components();
         state
     }
@@ -236,28 +243,28 @@ impl State {
         self.components.clear();
         let cols = self.grid_cols as usize;
         let rows = self.grid_rows as usize;
-        
+
         let screen_w = self.config.width as f32;
         let screen_h = self.config.height as f32;
-        
+
         if screen_w == 0.0 || screen_h == 0.0 {
             return;
         }
 
         let max_tile_w = screen_w / self.grid_cols as f32;
         let max_tile_h = screen_h / self.grid_rows as f32;
-        
+
         let tile_s = max_tile_w.min(max_tile_h);
-        
+
         let step_x = tile_s / screen_w;
         let step_y = tile_s / screen_h;
-        
+
         let total_w = tile_s * self.grid_cols as f32;
         let total_h = tile_s * self.grid_rows as f32;
         let offset_x = (screen_w - total_w) / 2.0 / screen_w;
         let offset_y = (screen_h - total_h) / 2.0 / screen_h;
-        
-        let source_path = "src/shader.wgsl"; 
+
+        let source_path = "src/shader.wgsl";
 
         for y in 0..rows {
             for x in 0..cols {
@@ -267,7 +274,7 @@ impl State {
                     w: step_x,
                     h: step_y,
                 };
-                
+
                 let component = self.create_component(
                     &self.bind_group_layout,
                     source_path.to_string(),
@@ -280,49 +287,58 @@ impl State {
     }
 
     fn create_component(
-        &self, 
-        layout: &wgpu::BindGroupLayout, 
-        source: String, 
-        rect: Rect, 
-        opacity: f32
+        &self,
+        layout: &wgpu::BindGroupLayout,
+        source: String,
+        rect: Rect,
+        opacity: f32,
     ) -> ShaderComponent {
         let shader_source = fs::read_to_string(&source).unwrap_or_else(|_| {
-             println!("Failed to read {}, using fallback.", source);
-             include_str!("shader.wgsl").to_string()
-        });
-        
-        let shader = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(&source),
-            source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
+            println!("Failed to read {}, using fallback.", source);
+            include_str!("shader.wgsl").to_string()
         });
 
-        let pipeline_layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[layout],
-            ..Default::default()
-        });
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(&source),
+                source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
+            });
 
-        let pipeline = self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some(&source),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: self.config.format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                bind_group_layouts: &[layout],
+                ..Default::default()
+            });
+
+        let pipeline = self
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(&source),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: self.config.format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    cull_mode: None,
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            });
 
         let uniform_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(&format!("Uniform Buffer {}", source)),
@@ -356,8 +372,13 @@ impl State {
         self.background_component = self.create_component(
             &self.bind_group_layout,
             "src/starfield.wgsl".to_string(),
-            Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
-            1.0
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 1.0,
+                h: 1.0,
+            },
+            1.0,
         );
         println!("All shaders reloaded.");
     }
@@ -390,7 +411,7 @@ impl State {
             mouse_x: self.mouse_pos.0,
             mouse_y: self.mouse_pos.1,
             mouse_pressed: if self.mouse_pressed { 1 } else { 0 },
-            opacity: 1.0, 
+            opacity: 1.0,
         };
 
         let fade_factor = self.calculate_opacity();
@@ -398,14 +419,19 @@ impl State {
         // Update background
         let mut bg_uniforms = global_uniforms;
         bg_uniforms.opacity = fade_factor;
-        self.queue.write_buffer(&self.background_component.uniform_buffer, 0, bytemuck::cast_slice(&[bg_uniforms]));
+        self.queue.write_buffer(
+            &self.background_component.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[bg_uniforms]),
+        );
 
         for comp in &self.components {
             let mut u = global_uniforms;
             u.opacity = comp.opacity * fade_factor;
-            self.queue.write_buffer(&comp.uniform_buffer, 0, bytemuck::cast_slice(&[u]));
+            self.queue
+                .write_buffer(&comp.uniform_buffer, 0, bytemuck::cast_slice(&[u]));
         }
-        
+
         self.frame_count += 1;
     }
 
@@ -419,35 +445,45 @@ impl State {
         self.egui_ctx.begin_frame(raw_input);
 
         let mut grid_size_changed = false;
-        
+
         egui::Window::new("Settings").show(&self.egui_ctx, |ui| {
-             ui.label("Grid Tiling");
-             if ui.add(egui::Slider::new(&mut self.grid_cols, 1..=5).text("Columns")).changed() {
-                 grid_size_changed = true;
-             }
-             if ui.add(egui::Slider::new(&mut self.grid_rows, 1..=5).text("Rows")).changed() {
-                 grid_size_changed = true;
-             }
+            ui.label("Grid Tiling");
+            if ui
+                .add(egui::Slider::new(&mut self.grid_cols, 1..=5).text("Columns"))
+                .changed()
+            {
+                grid_size_changed = true;
+            }
+            if ui
+                .add(egui::Slider::new(&mut self.grid_rows, 1..=5).text("Rows"))
+                .changed()
+            {
+                grid_size_changed = true;
+            }
         });
 
         let full_output = self.egui_ctx.end_frame();
-        
+
         if grid_size_changed {
             self.rebuild_components();
         }
 
-        self.egui_state.handle_platform_output(&self.window, full_output.platform_output);
-        
-        let tris = self.egui_ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
+        self.egui_state
+            .handle_platform_output(&self.window, full_output.platform_output);
+
+        let tris = self
+            .egui_ctx
+            .tessellate(full_output.shapes, full_output.pixels_per_point);
         for (id, image_delta) in &full_output.textures_delta.set {
-            self.egui_renderer.update_texture(&self.device, &self.queue, *id, image_delta);
+            self.egui_renderer
+                .update_texture(&self.device, &self.queue, *id, image_delta);
         }
-        
+
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [self.config.width, self.config.height],
             pixels_per_point: self.window.scale_factor() as f32,
         };
-        
+
         self.egui_renderer.update_buffers(
             &self.device,
             &self.queue,
@@ -471,7 +507,7 @@ impl State {
 
             let screen_w = self.config.width as f32;
             let screen_h = self.config.height as f32;
-            
+
             // Draw Background
             rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0);
             rpass.set_pipeline(&self.background_component.pipeline);
@@ -484,12 +520,12 @@ impl State {
                 let y = comp.rect.y * screen_h;
                 let w = comp.rect.w * screen_w;
                 let h = comp.rect.h * screen_h;
-                
+
                 let safe_x = x.max(0.0);
                 let safe_y = y.max(0.0);
                 let safe_w = w.max(1.0);
                 let safe_h = h.max(1.0);
-                
+
                 let final_w = if safe_x + safe_w > screen_w {
                     screen_w - safe_x
                 } else {
@@ -509,12 +545,13 @@ impl State {
                     rpass.draw(0..3, 0..1);
                 }
             }
-            
+
             // Draw Egui
             rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0);
-            self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
+            self.egui_renderer
+                .render(&mut rpass, &tris, &screen_descriptor);
         }
-        
+
         for id in &full_output.textures_delta.free {
             self.egui_renderer.free_texture(id);
         }
@@ -543,7 +580,7 @@ fn main() {
                 if response.consumed {
                     return;
                 }
-                
+
                 match event {
                     WindowEvent::CloseRequested => elwt.exit(),
                     WindowEvent::Resized(s) => {
@@ -591,7 +628,7 @@ fn main() {
                     }
                     _ => {}
                 }
-            },
+            }
             Event::AboutToWait => window.request_redraw(),
             _ => {}
         })
