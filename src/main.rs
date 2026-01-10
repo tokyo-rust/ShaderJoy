@@ -52,8 +52,13 @@ struct State {
     frame_count: u32,
     mouse_pos: (f32, f32),
     mouse_pressed: bool,
-    #[allow(dead_code)]
     window: Arc<winit::window::Window>,
+    
+    // Egui fields
+    egui_ctx: egui::Context,
+    egui_state: egui_winit::State,
+    egui_renderer: egui_wgpu::Renderer,
+    grid_size: u32,
 }
 
 impl State {
@@ -105,35 +110,24 @@ impl State {
             label: Some("uniform_bind_group_layout"),
         });
 
-        // Initialize components
-        let shader_defs = [
-            ("src/shader.wgsl", Rect { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, 1.0),
-            ("src/twinkley.wgsl", Rect { x: 0.5, y: 0.0, w: 0.5, h: 0.5 }, 1.0),
-            ("src/shader3.wgsl", Rect { x: 0.0, y: 0.5, w: 0.5, h: 0.5 }, 1.0),
-            ("src/shader4.wgsl", Rect { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, 1.0),
-        ];
+        // Egui initialization
+        let egui_ctx = egui::Context::default();
+        let egui_state = egui_winit::State::new(
+            egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            Some(window.scale_factor() as f32),
+            None,
+        );
+        let egui_renderer = egui_wgpu::Renderer::new(&device, format, None, 1);
 
-        let mut components = Vec::new();
-
-        for (source_path, rect, opacity) in shader_defs {
-            let component = Self::create_component(
-                &device, 
-                &config, 
-                &bind_group_layout, 
-                source_path.to_string(), 
-                rect, 
-                opacity
-            );
-            components.push(component);
-        }
-
-        Self {
+        let mut state = Self {
             surface,
             device,
             queue,
             config,
             size,
-            components,
+            components: Vec::new(),
             bind_group_layout,
             start_time: Instant::now(),
             fade_start_time: None,
@@ -141,12 +135,46 @@ impl State {
             mouse_pos: (0.0, 0.0),
             mouse_pressed: false,
             window,
+            egui_ctx,
+            egui_state,
+            egui_renderer,
+            grid_size: 1, // Default to 1x1
+        };
+        
+        state.rebuild_components();
+        state
+    }
+
+    fn rebuild_components(&mut self) {
+        self.components.clear();
+        let grid_size = self.grid_size as usize;
+        let step = 1.0 / self.grid_size as f32;
+        
+        // Just use shader.wgsl for all tiles as requested
+        let source_path = "src/shader.wgsl"; 
+
+        for y in 0..grid_size {
+            for x in 0..grid_size {
+                let rect = Rect {
+                    x: x as f32 * step,
+                    y: y as f32 * step,
+                    w: step,
+                    h: step,
+                };
+                
+                let component = self.create_component(
+                    &self.bind_group_layout,
+                    source_path.to_string(),
+                    rect,
+                    1.0,
+                );
+                self.components.push(component);
+            }
         }
     }
 
     fn create_component(
-        device: &wgpu::Device, 
-        config: &wgpu::SurfaceConfiguration, 
+        &self, 
         layout: &wgpu::BindGroupLayout, 
         source: String, 
         rect: Rect, 
@@ -157,34 +185,32 @@ impl State {
              include_str!("shader.wgsl").to_string()
         });
         
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let shader = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(&source),
             source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let pipeline_layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[layout],
             ..Default::default()
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(&source),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[],
-                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: self.config.format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
             depth_stencil: None,
@@ -192,14 +218,14 @@ impl State {
             multiview: None,
         });
 
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        let uniform_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(&format!("Uniform Buffer {}", source)),
             size: std::mem::size_of::<Uniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -220,21 +246,7 @@ impl State {
 
     fn reload_shader(&mut self) {
         println!("Reloading shaders...");
-        let mut new_components = Vec::new();
-        
-        // Re-create components using existing properties
-        for old_comp in &self.components {
-             let component = Self::create_component(
-                &self.device, 
-                &self.config, 
-                &self.bind_group_layout, 
-                old_comp.source.clone(), 
-                old_comp.rect, 
-                old_comp.opacity
-            );
-            new_components.push(component);
-        }
-        self.components = new_components;
+        self.rebuild_components();
         println!("All shaders reloaded.");
     }
 
@@ -276,6 +288,45 @@ impl State {
         let view = output.texture.create_view(&Default::default());
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
+        // Prepare Egui
+        let raw_input = self.egui_state.take_egui_input(&self.window);
+        self.egui_ctx.begin_frame(raw_input);
+
+        let mut grid_size_changed = false;
+        
+        egui::Window::new("Settings").show(&self.egui_ctx, |ui| {
+             ui.label("Grid Tiling");
+             if ui.add(egui::Slider::new(&mut self.grid_size, 1..=5).text("Grid Size")).changed() {
+                 grid_size_changed = true;
+             }
+        });
+
+        let full_output = self.egui_ctx.end_frame();
+        
+        if grid_size_changed {
+            self.rebuild_components();
+        }
+
+        self.egui_state.handle_platform_output(&self.window, full_output.platform_output);
+        
+        let tris = self.egui_ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
+        for (id, image_delta) in &full_output.textures_delta.set {
+            self.egui_renderer.update_texture(&self.device, &self.queue, *id, image_delta);
+        }
+        
+        let screen_descriptor = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: self.window.scale_factor() as f32,
+        };
+        
+        self.egui_renderer.update_buffers(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &tris,
+            &screen_descriptor,
+        );
+
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -297,13 +348,54 @@ impl State {
                 let y = comp.rect.y * screen_h;
                 let w = comp.rect.w * screen_w;
                 let h = comp.rect.h * screen_h;
+                
+                // Clamp viewport to safe bounds
+                let safe_x = x.max(0.0);
+                let safe_y = y.max(0.0);
+                let safe_w = w.max(1.0); // Ensure minimal width
+                let safe_h = h.max(1.0); // Ensure minimal height
+                
+                // Ensure we don't exceed screen bounds
+                // Note: set_viewport(x, y, w, h, ...)
+                // Validation requires x + w <= render_target_width
+                
+                let final_w = if safe_x + safe_w > screen_w {
+                    screen_w - safe_x
+                } else {
+                    safe_w
+                };
 
-                rpass.set_viewport(x, y, w, h, 0.0, 1.0);
-                rpass.set_pipeline(&comp.pipeline);
-                rpass.set_bind_group(0, &comp.bind_group, &[]);
-                rpass.draw(0..3, 0..1);
+                let final_h = if safe_y + safe_h > screen_h {
+                    screen_h - safe_y
+                } else {
+                    safe_h
+                };
+
+                // Only draw if we have valid dimensions
+                if final_w > 0.0 && final_h > 0.0 {
+                    rpass.set_viewport(safe_x, safe_y, final_w, final_h, 0.0, 1.0);
+                    rpass.set_pipeline(&comp.pipeline);
+                    rpass.set_bind_group(0, &comp.bind_group, &[]);
+                    rpass.draw(0..3, 0..1);
+                }
             }
+            
+            // Draw Egui
+            // Since we use the same render pass, we can just render egui on top.
+            // But we modified viewport for shaders. We should probably reset it or use a separate pass?
+            // rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0); // Reset viewport
+            // egui_renderer.render expects a render pass.
+            
+            // Important: We need to reset viewport for UI
+            rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0);
+            
+            self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
         }
+        
+        for id in &full_output.textures_delta.free {
+            self.egui_renderer.free_texture(id);
+        }
+
         self.queue.submit(Some(encoder.finish()));
         output.present();
         Ok(())
@@ -323,51 +415,58 @@ fn main() {
 
     event_loop
         .run(move |event, elwt| match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => elwt.exit(),
-                WindowEvent::Resized(s) => {
-                    state.size = s;
-                    state.config.width = s.width;
-                    state.config.height = s.height;
-                    state.surface.configure(&state.device, &state.config);
+            Event::WindowEvent { event, .. } => {
+                let response = state.egui_state.on_window_event(&state.window, &event);
+                if response.consumed {
+                    return;
                 }
-                WindowEvent::CursorMoved { position, .. } => {
-                    state.mouse_pos = (position.x as f32, position.y as f32);
-                }
-                WindowEvent::MouseInput {
-                    state: s,
-                    button: winit::event::MouseButton::Left,
-                    ..
-                } => {
-                    state.mouse_pressed = s == ElementState::Pressed;
-                }
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            physical_key: PhysicalKey::Code(KeyCode::KeyR),
-                            state: ElementState::Pressed,
-                            ..
-                        },
-                    ..
-                } => state.reload_shader(),
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            physical_key: PhysicalKey::Code(KeyCode::KeyF),
-                            state: ElementState::Pressed,
-                            ..
-                        },
-                    ..
-                } => {
-                    state.fade_start_time = Some(Instant::now());
-                }
-                WindowEvent::RedrawRequested => {
-                    state.update();
-                    if let Err(e) = state.render() {
-                        eprintln!("{:?}", e);
+                
+                match event {
+                    WindowEvent::CloseRequested => elwt.exit(),
+                    WindowEvent::Resized(s) => {
+                        state.size = s;
+                        state.config.width = s.width;
+                        state.config.height = s.height;
+                        state.surface.configure(&state.device, &state.config);
                     }
+                    WindowEvent::CursorMoved { position, .. } => {
+                        state.mouse_pos = (position.x as f32, position.y as f32);
+                    }
+                    WindowEvent::MouseInput {
+                        state: s,
+                        button: winit::event::MouseButton::Left,
+                        ..
+                    } => {
+                        state.mouse_pressed = s == ElementState::Pressed;
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(KeyCode::KeyR),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    } => state.reload_shader(),
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(KeyCode::KeyF),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    } => {
+                        state.fade_start_time = Some(Instant::now());
+                    }
+                    WindowEvent::RedrawRequested => {
+                        state.update();
+                        if let Err(e) = state.render() {
+                            eprintln!("{:?}", e);
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
             },
             Event::AboutToWait => window.request_redraw(),
             _ => {}
