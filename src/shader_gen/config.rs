@@ -6,6 +6,8 @@ pub struct ShaderGenConfig {
     pub prompt_word_count: usize,
     /// The prompt template. Use {words} for word list and {uniforms} for uniform definitions.
     pub prompt_template: String,
+    /// Word bank to use, if any
+    pub word_bank: Option<Vec<String>>,
     /// LLM provider configuration
     pub llm: LlmConfig,
 }
@@ -15,6 +17,7 @@ impl Default for ShaderGenConfig {
         Self {
             prompt_word_count: 10,
             prompt_template: DEFAULT_PROMPT_TEMPLATE.to_string(),
+            word_bank: None,
             llm: LlmConfig::default(),
         }
     }
