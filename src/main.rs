@@ -231,8 +231,8 @@ impl State {
             egui_ctx,
             egui_state,
             egui_renderer,
-            grid_cols: 1,
-            grid_rows: 1,
+            grid_cols: 3,
+            grid_rows: 3,
         };
 
         state.rebuild_components();
@@ -447,7 +447,7 @@ impl State {
         let mut grid_size_changed = false;
 
         egui::Window::new("Settings").show(&self.egui_ctx, |ui| {
-            ui.label("Grid Tiling");
+            ui.label("Grid Size");
             if ui
                 .add(egui::Slider::new(&mut self.grid_cols, 1..=5).text("Columns"))
                 .changed()
