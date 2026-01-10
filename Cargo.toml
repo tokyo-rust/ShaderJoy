@@ -21,6 +21,6 @@ naga = { version = "28", features = ["wgsl-in"] }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.9.11"
-
-[dev-dependencies]
+rand = "0.9.2"
+random_word = { version = "0.4", features = ["en"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

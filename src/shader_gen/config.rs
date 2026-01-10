@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for shader generation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShaderGenConfig {
-    pub rows: u32,
-    pub cols: u32,
+    pub prompt_word_count: usize,
     /// The prompt template. Use {words} for word list and {uniforms} for uniform definitions.
     pub prompt_template: String,
     /// LLM provider configuration
@@ -14,8 +13,7 @@ pub struct ShaderGenConfig {
 impl Default for ShaderGenConfig {
     fn default() -> Self {
         Self {
-            rows: 2,
-            cols: 2,
+            prompt_word_count: 10,
             prompt_template: DEFAULT_PROMPT_TEMPLATE.to_string(),
             llm: LlmConfig::default(),
         }
