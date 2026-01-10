@@ -1,7 +1,7 @@
-use std::borrow::Cow;
 use std::fs;
 use std::sync::Arc;
 use std::time::Instant;
+use std::{borrow::Cow, net::SocketAddr};
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
@@ -9,8 +9,11 @@ use winit::{
     window::WindowBuilder,
 };
 
-use crate::generation::{generate_specimens, Generation, Specimen};
 use crate::shader_gen::config::ShaderGenConfig;
+use crate::{
+    api::run_server,
+    generation::{Generation, Specimen, generate_specimens},
+};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 mod api;
@@ -317,13 +320,8 @@ impl State {
                     (fallback_source.clone(), "Fallback".to_string())
                 };
 
-                let component = self.create_component(
-                    &self.bind_group_layout,
-                    source_code,
-                    label,
-                    rect,
-                    1.0,
-                );
+                let component =
+                    self.create_component(&self.bind_group_layout, source_code, label, rect, 1.0);
                 self.components.push(component);
                 i += 1;
             }
@@ -440,11 +438,8 @@ impl State {
 
                 self.rt_handle.spawn(async move {
                     let results = generate_specimens(Some(parent), count, &config).await;
-                    let valid: Vec<Specimen> = results
-                        .into_iter()
-                        .filter_map(|r| r.ok())
-                        .collect();
-                    
+                    let valid: Vec<Specimen> = results.into_iter().filter_map(|r| r.ok()).collect();
+
                     if let Err(e) = tx.send(valid) {
                         eprintln!("Failed to send generation results: {}", e);
                     }
@@ -682,6 +677,11 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
+
+    if std::env::args().any(|arg| arg == "--serve") {
+        rt.block_on(run_server("0.0.0.0:7562".parse().unwrap()));
+        return;
+    }
     let mut state = rt.block_on(State::new(window.clone()));
 
     event_loop

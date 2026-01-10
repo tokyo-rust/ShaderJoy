@@ -41,6 +41,7 @@ async fn generate_handler(Json(req): Json<GenerateRequest>) -> Json<GenerateResp
     let parent = req.parent.map(|p| p.into());
     let permutation_cnt = 9;
 
+    println!("Generating shaders on api...");
     let results = generate_specimens(parent, permutation_cnt, &config).await;
 
     let mut shaders = Vec::new();
