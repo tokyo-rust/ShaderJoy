@@ -131,7 +131,7 @@ impl Default for LlmConfig {
             model: Some("gemini-3-flash-preview".to_string()),
             api_key_env_var: "GOOGLE_API_KEY".to_string(),
             temperature: 0.8,
-            max_tokens: 100000,
+            max_tokens: 100_000,
             system_prompt: None,
         }
     }
@@ -147,7 +147,7 @@ impl LlmConfig {
     pub fn openai() -> Self {
         Self {
             provider: LlmProvider::OpenAI,
-            model: Some("gpt-4o".to_string()),
+            model: Some("gpt-5.2".to_string()),
             api_key_env_var: "OPENAI_API_KEY".to_string(),
             ..Default::default()
         }
@@ -157,7 +157,7 @@ impl LlmConfig {
     pub fn anthropic() -> Self {
         Self {
             provider: LlmProvider::Anthropic,
-            model: Some("claude-sonnet-4-20250514".to_string()),
+            model: Some("claude-sonnet-4-5-20250929".to_string()),
             api_key_env_var: "ANTHROPIC_API_KEY".to_string(),
             ..Default::default()
         }

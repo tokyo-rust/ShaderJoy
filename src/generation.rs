@@ -1,11 +1,14 @@
 use crate::shader_gen::config::ShaderGenConfig;
 use crate::shader_gen::error::Result;
 use crate::shader_gen::generate_with_retry;
+use rand::Rng;
 use rand::prelude::IndexedRandom;
 use random_word::Lang;
 
-fn random_prompt_word() -> String {
-    random_word::r#gen(Lang::En).to_string()
+fn random_prompt_word(rng: &mut impl Rng) -> String {
+    let all_words = random_word::all(Lang::En);
+    let idx = rng.random_range(0..all_words.len());
+    all_words[idx].to_string()
 }
 
 /// A collection of current specimen and a lineage of parents.
@@ -61,14 +64,17 @@ impl Generation {
         let mut rng = rand::rng();
 
         let generation_num = parent.as_ref().map_or(1, |p| p.generation + 1);
-        println!("Starting generation step. Permutations: {}", permutation_cnt);
+        println!(
+            "Starting generation step. Permutations: {}",
+            permutation_cnt
+        );
 
         let mut tasks = Vec::with_capacity(permutation_cnt);
 
         let base_words = if parent.is_none() {
             Some(
                 (0..config.prompt_word_count)
-                    .map(|_| random_prompt_word())
+                    .map(|_| random_prompt_word(&mut rng))
                     .collect::<Vec<String>>(),
             )
         } else {
@@ -89,11 +95,13 @@ impl Generation {
 
                 let new_word_count = config.prompt_word_count.saturating_sub(words_to_freeze);
                 for _ in 0..new_word_count {
-                    frozen.push(random_prompt_word());
+                    frozen.push(random_prompt_word(&mut rng));
                 }
                 frozen
             } else {
-                base_words.clone().unwrap()
+                (0..config.prompt_word_count)
+                    .map(|_| random_prompt_word(&mut rng))
+                    .collect()
             };
 
             println!(
