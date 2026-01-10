@@ -1,5 +1,5 @@
 [package]
-name = "local-shader-toy"
+name = "ShaderJoy"
 version = "0.1.0"
 edition = "2024"
 
