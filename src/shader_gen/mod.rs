@@ -10,9 +10,6 @@ use llm::{
 use naga::front::wgsl;
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 
-pub use config::{LlmConfig, UniformType};
-pub use error::ShaderGenError as Error;
-
 pub async fn generate_with_retry(
     config: &ShaderGenConfig,
     words: &[String],
@@ -172,6 +169,8 @@ fn extract_shader_code(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::shader_gen::config::LlmConfig;
+
     use super::*;
 
     fn gemini_config() -> ShaderGenConfig {
