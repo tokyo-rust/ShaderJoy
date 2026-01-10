@@ -9,81 +9,6 @@ use winit::{
     window::WindowBuilder,
 };
 
-mod generation;
-
-fn main() {
-    let event_loop = EventLoop::new().unwrap();
-    let window = Arc::new(
-        WindowBuilder::new()
-            .with_title("Pick a Shader That Sparks Joy")
-            .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
-            .build(&event_loop)
-            .unwrap(),
-    );
-    let mut state = pollster::block_on(State::new(window.clone()));
-
-    event_loop
-        .run(move |event, elwt| match event {
-            Event::WindowEvent { event, .. } => {
-                let response = state.egui_state.on_window_event(&state.window, &event);
-                if response.consumed {
-                    return;
-                }
-
-                match event {
-                    WindowEvent::CloseRequested => elwt.exit(),
-                    WindowEvent::Resized(s) => {
-                        state.size = s;
-                        state.config.width = s.width;
-                        state.config.height = s.height;
-                        state.surface.configure(&state.device, &state.config);
-                        state.rebuild_components(); // Rebuild to fix aspect ratios
-                    }
-                    WindowEvent::CursorMoved { position, .. } => {
-                        state.mouse_pos = (position.x as f32, position.y as f32);
-                    }
-                    WindowEvent::MouseInput {
-                        state: s,
-                        button: winit::event::MouseButton::Left,
-                        ..
-                    } => {
-                        state.mouse_pressed = s == ElementState::Pressed;
-                    }
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                physical_key: PhysicalKey::Code(KeyCode::KeyR),
-                                state: ElementState::Pressed,
-                                ..
-                            },
-                        ..
-                    } => state.reload_shader(),
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                physical_key: PhysicalKey::Code(KeyCode::KeyF),
-                                state: ElementState::Pressed,
-                                ..
-                            },
-                        ..
-                    } => {
-                        state.fade_start_time = Some(Instant::now());
-                    }
-                    WindowEvent::RedrawRequested => {
-                        state.update();
-                        if let Err(e) = state.render() {
-                            eprintln!("{:?}", e);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Event::AboutToWait => window.request_redraw(),
-            _ => {}
-        })
-        .unwrap();
-}
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
@@ -94,7 +19,7 @@ struct Uniforms {
     mouse_x: f32,
     mouse_y: f32,
     mouse_pressed: u32,
-    opacity: f32,
+    opacity: f32, 
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -129,7 +54,7 @@ struct State {
     mouse_pos: (f32, f32),
     mouse_pressed: bool,
     window: Arc<winit::window::Window>,
-
+    
     // Egui fields
     egui_ctx: egui::Context,
     egui_state: egui_winit::State,
@@ -187,31 +112,32 @@ impl State {
             label: Some("uniform_bind_group_layout"),
         });
 
-        // Initialize helper to create components (we need it before constructing State)
-        let create_component = |layout: &wgpu::BindGroupLayout,
-                                source: String,
-                                rect: Rect,
-                                opacity: f32|
-         -> ShaderComponent {
-            let shader_source = fs::read_to_string(&source).unwrap_or_else(|_| {
-                // Use starfield fallback if starfield file is missing to avoid panic
-                // Or revert to basic shader
-                println!("Failed to read {}, using fallback.", source);
-                include_str!("shader.wgsl").to_string()
+        // Initialize helper to create components
+        let create_comp_helper = |
+            dev: &wgpu::Device,
+            conf: &wgpu::SurfaceConfiguration,
+            layout: &wgpu::BindGroupLayout, 
+            src: String, 
+            r: Rect, 
+            op: f32
+        | -> ShaderComponent {
+            let shader_source = fs::read_to_string(&src).unwrap_or_else(|_| {
+                 println!("Failed to read {}, using fallback.", src);
+                 include_str!("shader.wgsl").to_string()
             });
-
-            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(&source),
+            
+            let shader = dev.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(&src),
                 source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
             });
 
-            let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            let pipeline_layout = dev.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[layout],
                 ..Default::default()
             });
 
-            let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(&source),
+            let pipeline = dev.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(&src),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
@@ -222,28 +148,25 @@ impl State {
                     module: &shader,
                     entry_point: "fs_main",
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: config.format,
+                        format: conf.format,
                         blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                 }),
-                primitive: wgpu::PrimitiveState {
-                    cull_mode: None,
-                    ..Default::default()
-                },
+                primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
             });
 
-            let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(&format!("Uniform Buffer {}", source)),
+            let uniform_buffer = dev.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!("Uniform Buffer {}", src)),
                 size: std::mem::size_of::<Uniforms>() as u64,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
 
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            let bind_group = dev.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
@@ -256,23 +179,20 @@ impl State {
                 pipeline,
                 uniform_buffer,
                 bind_group,
-                source,
-                rect,
-                opacity,
+                source: src,
+                rect: r,
+                opacity: op,
             }
         };
 
         // Create Background Component
-        let background_component = create_component(
+        let background_component = create_comp_helper(
+            &device,
+            &config,
             &bind_group_layout,
             "src/starfield.wgsl".to_string(),
-            Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 1.0,
-                h: 1.0,
-            },
-            1.0,
+            Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
+            1.0
         );
 
         // Egui initialization
@@ -304,10 +224,10 @@ impl State {
             egui_ctx,
             egui_state,
             egui_renderer,
-            grid_cols: 1,
+            grid_cols: 1, 
             grid_rows: 1,
         };
-
+        
         state.rebuild_components();
         state
     }
@@ -316,31 +236,28 @@ impl State {
         self.components.clear();
         let cols = self.grid_cols as usize;
         let rows = self.grid_rows as usize;
-
+        
         let screen_w = self.config.width as f32;
         let screen_h = self.config.height as f32;
-
+        
         if screen_w == 0.0 || screen_h == 0.0 {
             return;
         }
 
         let max_tile_w = screen_w / self.grid_cols as f32;
         let max_tile_h = screen_h / self.grid_rows as f32;
-
-        // Square tiles: side is min of allowed width and height
+        
         let tile_s = max_tile_w.min(max_tile_h);
-
-        // Normalized dimensions
+        
         let step_x = tile_s / screen_w;
         let step_y = tile_s / screen_h;
-
-        // Centering offset
+        
         let total_w = tile_s * self.grid_cols as f32;
         let total_h = tile_s * self.grid_rows as f32;
         let offset_x = (screen_w - total_w) / 2.0 / screen_w;
         let offset_y = (screen_h - total_h) / 2.0 / screen_h;
-
-        let source_path = "src/shader.wgsl";
+        
+        let source_path = "src/shader.wgsl"; 
 
         for y in 0..rows {
             for x in 0..cols {
@@ -350,7 +267,7 @@ impl State {
                     w: step_x,
                     h: step_y,
                 };
-
+                
                 let component = self.create_component(
                     &self.bind_group_layout,
                     source_path.to_string(),
@@ -363,58 +280,49 @@ impl State {
     }
 
     fn create_component(
-        &self,
-        layout: &wgpu::BindGroupLayout,
-        source: String,
-        rect: Rect,
-        opacity: f32,
+        &self, 
+        layout: &wgpu::BindGroupLayout, 
+        source: String, 
+        rect: Rect, 
+        opacity: f32
     ) -> ShaderComponent {
         let shader_source = fs::read_to_string(&source).unwrap_or_else(|_| {
-            println!("Failed to read {}, using fallback.", source);
-            include_str!("shader.wgsl").to_string()
+             println!("Failed to read {}, using fallback.", source);
+             include_str!("shader.wgsl").to_string()
+        });
+        
+        let shader = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(&source),
+            source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
         });
 
-        let shader = self
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(&source),
-                source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
-            });
+        let pipeline_layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            bind_group_layouts: &[layout],
+            ..Default::default()
+        });
 
-        let pipeline_layout = self
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[layout],
-                ..Default::default()
-            });
-
-        let pipeline = self
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(&source),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &[],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: self.config.format,
-                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    cull_mode: None,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            });
+        let pipeline = self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(&source),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: self.config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+        });
 
         let uniform_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(&format!("Uniform Buffer {}", source)),
@@ -444,21 +352,33 @@ impl State {
 
     fn reload_shader(&mut self) {
         println!("Reloading shaders...");
-        // Reload components
         self.rebuild_components();
-        // Also reload background
         self.background_component = self.create_component(
             &self.bind_group_layout,
             "src/starfield.wgsl".to_string(),
-            Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 1.0,
-                h: 1.0,
-            },
-            1.0,
+            Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
+            1.0
         );
         println!("All shaders reloaded.");
+    }
+
+    fn calculate_opacity(&mut self) -> f32 {
+        if let Some(start) = self.fade_start_time {
+            let elapsed = start.elapsed().as_secs_f32();
+            if elapsed < 2.0 {
+                // Fade out over 2 seconds (1.0 -> 0.0)
+                1.0 - (elapsed / 2.0)
+            } else if elapsed < 3.0 {
+                // Hold black for 1 second
+                0.0
+            } else {
+                // Reset
+                self.fade_start_time = None;
+                1.0
+            }
+        } else {
+            1.0
+        }
     }
 
     fn update(&mut self) {
@@ -470,35 +390,22 @@ impl State {
             mouse_x: self.mouse_pos.0,
             mouse_y: self.mouse_pos.1,
             mouse_pressed: if self.mouse_pressed { 1 } else { 0 },
-            opacity: 1.0,
+            opacity: 1.0, 
         };
+
+        let fade_factor = self.calculate_opacity();
 
         // Update background
-        self.queue.write_buffer(
-            &self.background_component.uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[global_uniforms]),
-        );
-
-        let fade_factor = if let Some(start) = self.fade_start_time {
-            let elapsed = start.elapsed().as_secs_f32();
-            if elapsed < 1.0 {
-                1.0 - elapsed
-            } else {
-                self.fade_start_time = None; // Reset
-                1.0
-            }
-        } else {
-            1.0
-        };
+        let mut bg_uniforms = global_uniforms;
+        bg_uniforms.opacity = fade_factor;
+        self.queue.write_buffer(&self.background_component.uniform_buffer, 0, bytemuck::cast_slice(&[bg_uniforms]));
 
         for comp in &self.components {
             let mut u = global_uniforms;
             u.opacity = comp.opacity * fade_factor;
-            self.queue
-                .write_buffer(&comp.uniform_buffer, 0, bytemuck::cast_slice(&[u]));
+            self.queue.write_buffer(&comp.uniform_buffer, 0, bytemuck::cast_slice(&[u]));
         }
-
+        
         self.frame_count += 1;
     }
 
@@ -512,45 +419,35 @@ impl State {
         self.egui_ctx.begin_frame(raw_input);
 
         let mut grid_size_changed = false;
-
+        
         egui::Window::new("Settings").show(&self.egui_ctx, |ui| {
-            ui.label("Grid Tiling");
-            if ui
-                .add(egui::Slider::new(&mut self.grid_cols, 1..=5).text("Columns"))
-                .changed()
-            {
-                grid_size_changed = true;
-            }
-            if ui
-                .add(egui::Slider::new(&mut self.grid_rows, 1..=5).text("Rows"))
-                .changed()
-            {
-                grid_size_changed = true;
-            }
+             ui.label("Grid Tiling");
+             if ui.add(egui::Slider::new(&mut self.grid_cols, 1..=5).text("Columns")).changed() {
+                 grid_size_changed = true;
+             }
+             if ui.add(egui::Slider::new(&mut self.grid_rows, 1..=5).text("Rows")).changed() {
+                 grid_size_changed = true;
+             }
         });
 
         let full_output = self.egui_ctx.end_frame();
-
+        
         if grid_size_changed {
             self.rebuild_components();
         }
 
-        self.egui_state
-            .handle_platform_output(&self.window, full_output.platform_output);
-
-        let tris = self
-            .egui_ctx
-            .tessellate(full_output.shapes, full_output.pixels_per_point);
+        self.egui_state.handle_platform_output(&self.window, full_output.platform_output);
+        
+        let tris = self.egui_ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
         for (id, image_delta) in &full_output.textures_delta.set {
-            self.egui_renderer
-                .update_texture(&self.device, &self.queue, *id, image_delta);
+            self.egui_renderer.update_texture(&self.device, &self.queue, *id, image_delta);
         }
-
+        
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [self.config.width, self.config.height],
             pixels_per_point: self.window.scale_factor() as f32,
         };
-
+        
         self.egui_renderer.update_buffers(
             &self.device,
             &self.queue,
@@ -574,7 +471,7 @@ impl State {
 
             let screen_w = self.config.width as f32;
             let screen_h = self.config.height as f32;
-
+            
             // Draw Background
             rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0);
             rpass.set_pipeline(&self.background_component.pipeline);
@@ -587,13 +484,12 @@ impl State {
                 let y = comp.rect.y * screen_h;
                 let w = comp.rect.w * screen_w;
                 let h = comp.rect.h * screen_h;
-
-                // Clamp viewport
+                
                 let safe_x = x.max(0.0);
                 let safe_y = y.max(0.0);
                 let safe_w = w.max(1.0);
                 let safe_h = h.max(1.0);
-
+                
                 let final_w = if safe_x + safe_w > screen_w {
                     screen_w - safe_x
                 } else {
@@ -613,13 +509,12 @@ impl State {
                     rpass.draw(0..3, 0..1);
                 }
             }
-
+            
             // Draw Egui
             rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0);
-            self.egui_renderer
-                .render(&mut rpass, &tris, &screen_descriptor);
+            self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
         }
-
+        
         for id in &full_output.textures_delta.free {
             self.egui_renderer.free_texture(id);
         }
@@ -628,4 +523,77 @@ impl State {
         output.present();
         Ok(())
     }
+}
+
+fn main() {
+    let event_loop = EventLoop::new().unwrap();
+    let window = Arc::new(
+        WindowBuilder::new()
+            .with_title("Pick a Shader That Sparks Joy")
+            .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
+            .build(&event_loop)
+            .unwrap(),
+    );
+    let mut state = pollster::block_on(State::new(window.clone()));
+
+    event_loop
+        .run(move |event, elwt| match event {
+            Event::WindowEvent { event, .. } => {
+                let response = state.egui_state.on_window_event(&state.window, &event);
+                if response.consumed {
+                    return;
+                }
+                
+                match event {
+                    WindowEvent::CloseRequested => elwt.exit(),
+                    WindowEvent::Resized(s) => {
+                        state.size = s;
+                        state.config.width = s.width;
+                        state.config.height = s.height;
+                        state.surface.configure(&state.device, &state.config);
+                        state.rebuild_components();
+                    }
+                    WindowEvent::CursorMoved { position, .. } => {
+                        state.mouse_pos = (position.x as f32, position.y as f32);
+                    }
+                    WindowEvent::MouseInput {
+                        state: s,
+                        button: winit::event::MouseButton::Left,
+                        ..
+                    } => {
+                        state.mouse_pressed = s == ElementState::Pressed;
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(KeyCode::KeyR),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    } => state.reload_shader(),
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(KeyCode::KeyF),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    } => {
+                        state.fade_start_time = Some(Instant::now());
+                    }
+                    WindowEvent::RedrawRequested => {
+                        state.update();
+                        if let Err(e) = state.render() {
+                            eprintln!("{:?}", e);
+                        }
+                    }
+                    _ => {}
+                }
+            },
+            Event::AboutToWait => window.request_redraw(),
+            _ => {}
+        })
+        .unwrap();
 }

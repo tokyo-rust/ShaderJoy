@@ -23,7 +23,7 @@ impl Generation {
         let Some(parent) = self.current.get(index) else {
             return;
         };
-        self.generate(parent.clone());
+        self.generate(parent.clone(), 25); //GOAT, should be grid size - 1
     }
 
     pub fn go_back(&mut self) {
@@ -33,7 +33,7 @@ impl Generation {
         self.current = parent;
     }
 
-    pub fn generate(&mut self, parent: Specimen) {
+    pub fn generate(&mut self, parent: Specimen, permutation_cnt: usize) {
         let mut current = vec![];
         std::mem::swap(&mut current, &mut self.current);
         self.lineage.push(current);
