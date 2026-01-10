@@ -13,6 +13,7 @@ use crate::generation::{generate_specimens, Generation, Specimen};
 use crate::shader_gen::config::ShaderGenConfig;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+mod api;
 mod generation;
 mod shader_gen;
 
