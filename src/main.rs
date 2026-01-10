@@ -47,6 +47,7 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
     components: Vec<ShaderComponent>,
     bind_group_layout: wgpu::BindGroupLayout,
+    background_component: ShaderComponent,
     start_time: Instant,
     fade_start_time: Option<Instant>,
     frame_count: u32,
@@ -58,7 +59,8 @@ struct State {
     egui_ctx: egui::Context,
     egui_state: egui_winit::State,
     egui_renderer: egui_wgpu::Renderer,
-    grid_size: u32,
+    grid_cols: u32,
+    grid_rows: u32,
 }
 
 impl State {
@@ -110,6 +112,87 @@ impl State {
             label: Some("uniform_bind_group_layout"),
         });
 
+        // Initialize helper to create components (we need it before constructing State)
+        let create_component = |
+            layout: &wgpu::BindGroupLayout, 
+            source: String, 
+            rect: Rect, 
+            opacity: f32
+        | -> ShaderComponent {
+            let shader_source = fs::read_to_string(&source).unwrap_or_else(|_| {
+                 // Use starfield fallback if starfield file is missing to avoid panic
+                 // Or revert to basic shader
+                 println!("Failed to read {}, using fallback.", source);
+                 include_str!("shader.wgsl").to_string()
+            });
+            
+            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(&source),
+                source: wgpu::ShaderSource::Wgsl(Cow::Owned(shader_source)),
+            });
+
+            let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                bind_group_layouts: &[layout],
+                ..Default::default()
+            });
+
+            let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(&source),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            });
+
+            let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!("Uniform Buffer {}", source)),
+                size: std::mem::size_of::<Uniforms>() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                }],
+                label: None,
+            });
+
+            ShaderComponent {
+                pipeline,
+                uniform_buffer,
+                bind_group,
+                source,
+                rect,
+                opacity,
+            }
+        };
+
+        // Create Background Component
+        let background_component = create_component(
+            &bind_group_layout,
+            "src/starfield.wgsl".to_string(),
+            Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
+            1.0
+        );
+
         // Egui initialization
         let egui_ctx = egui::Context::default();
         let egui_state = egui_winit::State::new(
@@ -129,6 +212,7 @@ impl State {
             size,
             components: Vec::new(),
             bind_group_layout,
+            background_component,
             start_time: Instant::now(),
             fade_start_time: None,
             frame_count: 0,
@@ -138,7 +222,8 @@ impl State {
             egui_ctx,
             egui_state,
             egui_renderer,
-            grid_size: 1, // Default to 1x1
+            grid_cols: 1, 
+            grid_rows: 1,
         };
         
         state.rebuild_components();
@@ -147,19 +232,41 @@ impl State {
 
     fn rebuild_components(&mut self) {
         self.components.clear();
-        let grid_size = self.grid_size as usize;
-        let step = 1.0 / self.grid_size as f32;
+        let cols = self.grid_cols as usize;
+        let rows = self.grid_rows as usize;
         
-        // Just use shader.wgsl for all tiles as requested
+        let screen_w = self.config.width as f32;
+        let screen_h = self.config.height as f32;
+        
+        if screen_w == 0.0 || screen_h == 0.0 {
+            return;
+        }
+
+        let max_tile_w = screen_w / self.grid_cols as f32;
+        let max_tile_h = screen_h / self.grid_rows as f32;
+        
+        // Square tiles: side is min of allowed width and height
+        let tile_s = max_tile_w.min(max_tile_h);
+        
+        // Normalized dimensions
+        let step_x = tile_s / screen_w;
+        let step_y = tile_s / screen_h;
+        
+        // Centering offset
+        let total_w = tile_s * self.grid_cols as f32;
+        let total_h = tile_s * self.grid_rows as f32;
+        let offset_x = (screen_w - total_w) / 2.0 / screen_w;
+        let offset_y = (screen_h - total_h) / 2.0 / screen_h;
+        
         let source_path = "src/shader.wgsl"; 
 
-        for y in 0..grid_size {
-            for x in 0..grid_size {
+        for y in 0..rows {
+            for x in 0..cols {
                 let rect = Rect {
-                    x: x as f32 * step,
-                    y: y as f32 * step,
-                    w: step,
-                    h: step,
+                    x: offset_x + x as f32 * step_x,
+                    y: offset_y + y as f32 * step_y,
+                    w: step_x,
+                    h: step_y,
                 };
                 
                 let component = self.create_component(
@@ -246,7 +353,15 @@ impl State {
 
     fn reload_shader(&mut self) {
         println!("Reloading shaders...");
+        // Reload components
         self.rebuild_components();
+        // Also reload background
+        self.background_component = self.create_component(
+            &self.bind_group_layout,
+            "src/starfield.wgsl".to_string(),
+            Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
+            1.0
+        );
         println!("All shaders reloaded.");
     }
 
@@ -261,6 +376,9 @@ impl State {
             mouse_pressed: if self.mouse_pressed { 1 } else { 0 },
             opacity: 1.0, 
         };
+
+        // Update background
+        self.queue.write_buffer(&self.background_component.uniform_buffer, 0, bytemuck::cast_slice(&[global_uniforms]));
 
         let fade_factor = if let Some(start) = self.fade_start_time {
             let elapsed = start.elapsed().as_secs_f32();
@@ -296,7 +414,10 @@ impl State {
         
         egui::Window::new("Settings").show(&self.egui_ctx, |ui| {
              ui.label("Grid Tiling");
-             if ui.add(egui::Slider::new(&mut self.grid_size, 1..=5).text("Grid Size")).changed() {
+             if ui.add(egui::Slider::new(&mut self.grid_cols, 1..=5).text("Columns")).changed() {
+                 grid_size_changed = true;
+             }
+             if ui.add(egui::Slider::new(&mut self.grid_rows, 1..=5).text("Rows")).changed() {
                  grid_size_changed = true;
              }
         });
@@ -342,22 +463,25 @@ impl State {
 
             let screen_w = self.config.width as f32;
             let screen_h = self.config.height as f32;
+            
+            // Draw Background
+            rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0);
+            rpass.set_pipeline(&self.background_component.pipeline);
+            rpass.set_bind_group(0, &self.background_component.bind_group, &[]);
+            rpass.draw(0..3, 0..1);
 
+            // Draw Components
             for comp in &self.components {
                 let x = comp.rect.x * screen_w;
                 let y = comp.rect.y * screen_h;
                 let w = comp.rect.w * screen_w;
                 let h = comp.rect.h * screen_h;
                 
-                // Clamp viewport to safe bounds
+                // Clamp viewport
                 let safe_x = x.max(0.0);
                 let safe_y = y.max(0.0);
-                let safe_w = w.max(1.0); // Ensure minimal width
-                let safe_h = h.max(1.0); // Ensure minimal height
-                
-                // Ensure we don't exceed screen bounds
-                // Note: set_viewport(x, y, w, h, ...)
-                // Validation requires x + w <= render_target_width
+                let safe_w = w.max(1.0);
+                let safe_h = h.max(1.0);
                 
                 let final_w = if safe_x + safe_w > screen_w {
                     screen_w - safe_x
@@ -371,7 +495,6 @@ impl State {
                     safe_h
                 };
 
-                // Only draw if we have valid dimensions
                 if final_w > 0.0 && final_h > 0.0 {
                     rpass.set_viewport(safe_x, safe_y, final_w, final_h, 0.0, 1.0);
                     rpass.set_pipeline(&comp.pipeline);
@@ -381,14 +504,7 @@ impl State {
             }
             
             // Draw Egui
-            // Since we use the same render pass, we can just render egui on top.
-            // But we modified viewport for shaders. We should probably reset it or use a separate pass?
-            // rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0); // Reset viewport
-            // egui_renderer.render expects a render pass.
-            
-            // Important: We need to reset viewport for UI
             rpass.set_viewport(0.0, 0.0, screen_w, screen_h, 0.0, 1.0);
-            
             self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
         }
         
@@ -428,6 +544,7 @@ fn main() {
                         state.config.width = s.width;
                         state.config.height = s.height;
                         state.surface.configure(&state.device, &state.config);
+                        state.rebuild_components(); // Rebuild to fix aspect ratios
                     }
                     WindowEvent::CursorMoved { position, .. } => {
                         state.mouse_pos = (position.x as f32, position.y as f32);
