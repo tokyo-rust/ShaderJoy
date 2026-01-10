@@ -25,7 +25,7 @@ impl Default for ShaderGenConfig {
             prompt_template: DEFAULT_PROMPT_TEMPLATE.to_string(),
             word_bank: None,
             frozen_word_ratio: 0.85,
-            over_subscribe: 3.0,
+            over_subscribe: 2.0,
             parent_shader: None,
             llm: LlmConfig::default(),
         }
@@ -154,7 +154,7 @@ impl Default for LlmConfig {
             provider: LlmProvider::Gemini,
             model: Some("gemini-3-flash-preview".to_string()), //model: Some("gemini-3-pro-preview".to_string()),
             api_key_env_var: "GOOGLE_API_KEY".to_string(),
-            temperature: 0.8,
+            temperature: 0.95,
             max_tokens: 4000,
             system_prompt: None,
         }
