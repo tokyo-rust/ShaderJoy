@@ -12,3 +12,23 @@ When you click a shader, it becomes the parent of the next generation. New varia
 ShaderJoy explores human-in-the-loop generative art, where aesthetic selection replaces traditional fitness functions, and complex visuals emerge through iteration, mutation, and choice.
 
 The project is written in Rust, uses `wgpu` for GPU rendering, and integrates `llm` for generating shader mutations.
+
+## Quick Start (no Rust experience required)
+
+1. Install Rust: The Rust toolchain ships with `rustc` (compiler) and `cargo` (package manager).
+   - macOS/Linux: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` then restart your terminal.
+   - Windows: download and run the installer from https://rustup.rs/ (WSL works too).
+   - Verify: `rustc --version` and `cargo --version` should both print versions.
+
+2. Get the code:
+   - `git clone {this-repo}`
+   - `cd ShaderJoy`
+
+3. Run it:
+   - `cargo run --release`
+   - The first build can take a few minutes while Rust and GPU deps are compiled. When it finishes, a window will open showing the evolving shader grid. Click a shader tile to make it the parent for the next generation.
+
+4. (Optional) Enable LLM-driven mutations: set an API key for your chosen provider before running. Defaults use Gemini via `GOOGLE_API_KEY`, or set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` and update the provider in code if you prefer.
+   - Example for macOS/Linux: `export GOOGLE_API_KEY=your-key-here`
+   - On Windows PowerShell: `$env:GOOGLE_API_KEY="your-key-here"`
+5. If the app fails to start with a GPU error, update your graphics drivers. `wgpu` uses the native backend (Metal on macOS, DirectX on Windows, Vulkan on many Linux distros).
