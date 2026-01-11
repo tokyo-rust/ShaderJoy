@@ -1,7 +1,8 @@
 //! ShaderJoy Desktop Application Entry Point
 
-use shaderjoy_desktop::app;
+use anyhow::Result;
 
-fn main() {
+fn main() -> Result<()> {
     println!("ShaderJoy v2.0 - Desktop Application");
+    Ok(())
 }

@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 shaderjoy-core = { path = "../shaderjoy-core" }
 shaderjoy-render = { path = "../shaderjoy-render" }
+anyhow = "1.0"
 iced.workspace = true
 tokio.workspace = true
 tracing.workspace = true
