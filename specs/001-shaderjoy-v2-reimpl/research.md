@@ -1,112 +1,77 @@
 # Research: ShaderJoy v2.0 Reimplementation
 
-**Date**: 2025-01-10  
-**Branch**: `001-shaderjoy-v2-reimpl`  
+**Generated**: 2025-01-11  
 **Status**: Complete
 
-## Research Areas
-
-1. [Iced + wgpu Custom Shader Widgets](#1-iced--wgpu-custom-shader-widgets)
-2. [Multi-Provider LLM Support](#2-multi-provider-llm-support)
-3. [Audio Capture and FFT](#3-audio-capture-and-fft)
-4. [Streaming Generation Architecture](#4-streaming-generation-architecture)
-5. [Configuration Management](#5-configuration-management)
-
----
-
-## 1. Iced + wgpu Custom Shader Widgets
+## 1. Iced + wgpu Integration
 
 ### Decision
-Use `iced::widget::shader` with the `shader::Program` and `shader::Primitive` traits for custom GPU-rendered widgets.
+Use `iced::widget::shader` (built-in Shader widget) with Iced 0.14+.
 
 ### Rationale
-Iced provides first-class support for custom wgpu shader widgets via the `iced::widget::shader` module (requires `wgpu` feature). This is the official, maintained approach that:
-- Shares the wgpu `Device`/`Queue` automatically via `Primitive::prepare()`
-- Handles all lifecycle management (no manual integration needed)
-- Each shader widget can have its own `Pipeline` cached in `shader::Storage`
-- Supports 60 FPS via `window::frames()` subscription for animation ticks
+Iced 0.12+ has first-class wgpu support via `iced::widget::shader` module (requires `wgpu` feature). This is the idiomatic approach—no need to manually manage Device/Queue or integrate at a lower level. Iced owns the wgpu resources and provides clean abstractions.
 
 ### Alternatives Considered
-| Alternative | Verdict |
-|-------------|---------|
-| Manual wgpu integration | Rejected; overly complex and a maintenance burden |
-| Canvas widget | Rejected; poor performance for pixel-level GPU rendering |
-| `iced_wgpu::Primitive` directly | Lower-level; `shader::Program` is the recommended abstraction |
+- **Manual wgpu integration**: Full control but requires managing wgpu lifecycle separately from Iced, complex synchronization
+- **Bevy + egui**: Overkill for this use case, brings entire game engine
 
 ### Key Implementation Notes
 
-**Architecture pattern:**
-```rust
-impl shader::Program<Message> for ShaderProgram {
-    type State = WidgetState;        // Per-widget interaction state
-    type Primitive = ShaderPrimitive; // Data to render each frame
-    fn draw(&self, ...) -> Self::Primitive { ... }
-}
+1. **Core Traits** (from `iced::widget::shader`):
+   - `Program` - defines widget state and produces a `Primitive` each frame
+   - `Primitive` - implements `prepare()` (upload data) and `render()` (draw calls)
+   - `Storage` - caches your wgpu pipeline across frames
 
-impl shader::Primitive for ShaderPrimitive {
-    type Pipeline = ShaderPipeline;  // Cached wgpu pipeline
-    fn prepare(&self, pipeline: &mut Pipeline, device: &Device, queue: &Queue, ...) { ... }
-    fn render(&self, pipeline: &Pipeline, encoder: &mut CommandEncoder, ...) { ... }
-}
+2. **Pattern**:
+   ```rust
+   impl shader::Program<Message> for MyProgram {
+       type State = ...; // widget interaction state
+       type Primitive = MyPrimitive;
+       
+       fn draw(&self, ...) -> Self::Primitive { ... }
+       fn update(&self, ...) -> (Status, Option<Message>) { ... }
+   }
+   
+   impl shader::Primitive for MyPrimitive {
+       fn prepare(&self, format, device, queue, ..., storage) { ... }
+       fn render(&self, storage, target, viewport, encoder) { ... }
+   }
+   ```
 
-impl shader::Pipeline for ShaderPipeline {
-    fn new(device: &Device, queue: &Queue, format: TextureFormat) -> Self { ... }
-}
-```
+3. **Reference examples**:
+   - [`custom_shader`](https://github.com/iced-rs/iced/tree/master/examples/custom_shader) - official example
+   - [w23/iced-fragment-shader-widget-example](https://github.com/w23/iced-fragment-shader-widget-example) - Shadertoy-like implementation
 
-**For 3x3 grid:** Create 9 `shader()` widgets, each with its own `Program` instance. Pipelines are cached per-type in `Storage`.
-
-**Animation:** Use `window::frames().map(Message::Tick)` subscription to drive 60 FPS updates.
-
-**Reference examples:**
-- [Official `custom_shader` example](https://github.com/iced-rs/iced/tree/master/examples/custom_shader)
-- [iced-fragment-shader-widget-example](https://github.com/w23/iced-fragment-shader-widget-example)
+4. **Cargo.toml**: `iced = { version = "0.14", features = ["wgpu"] }`
 
 ---
 
-## 2. Multi-Provider LLM Support
+## 2. Multi-Provider LLM Client
 
 ### Decision
-Use the existing `llm` crate v1.3.x which natively supports all required providers including Ollama.
+Use **`genai`** crate as the primary multi-provider abstraction.
 
 ### Rationale
-1. **Native support for all providers**: OpenAI, Anthropic, Google (Gemini), and Ollama via `LLMBackend` enum
-2. **Already integrated**: ShaderJoy uses `llm` with `LLMBuilder` pattern
-3. **Unified API**: `LLMProvider` trait + `ChatProvider`/`CompletionProvider` traits
-4. **Feature-gated**: Providers enabled via Cargo features
+1. **Native multi-provider support**: Covers OpenAI, Anthropic, Gemini, Ollama, Groq, DeepSeek, xAI out of the box
+2. **Streaming built-in**: All providers support streaming with a unified API
+3. **Ergonomic design**: Single `Client` with normalized chat/stream APIs, no per-provider SDKs
+4. **Actively maintained**: v0.4.x (Jan 2025) with PDF, images, embeddings, custom headers
+5. **Defensive extension**: Provides `ServiceTargetResolver` for custom endpoints
 
 ### Alternatives Considered
-| Alternative | Verdict |
-|-------------|---------|
-| `llmclient` crate | Fewer providers, no Ollama |
-| `openllm` crate | OpenAI-compatible only |
-| Direct HTTP clients | Unnecessary complexity |
 
-### Key Implementation Notes
+| Crate | Pros | Cons |
+|-------|------|------|
+| **`llm` (graniet)** | More features (agents, memory, REST API), 277 stars | Heavier, more abstractions than needed |
+| **`flyllm`** | Load balancing, TOML config, task routing | Over-engineered for single-user shader tool |
+| **`multi-llm`** | Exact provider match | Very new (58 downloads), unproven |
+| **Roll your own** | Full control, minimal deps | Significant maintenance burden per provider |
 
-**Cargo.toml features:**
-```toml
-llm = { version = "1.3", default-features = false, features = [
-    "google", "openai", "anthropic", "ollama", "default-tls"
-] }
-```
-
-**Ollama configuration:**
+### Streaming Pattern
 ```rust
-LLMBuilder::new()
-    .backend(LLMBackend::Ollama)
-    .base_url("http://127.0.0.1:11434")  // No API key needed
-    .model("llama3.2:latest")
-    .build()
-```
-
-**Provider enum extension:**
-```rust
-pub enum LlmProvider {
-    OpenAI,
-    Anthropic,
-    Google,
-    Ollama,  // Add this variant
+let stream = client.exec_chat_stream(model, chat_req, None).await?;
+while let Some(chunk) = stream.next().await {
+    // Emit partial WGSL as it arrives
 }
 ```
 
@@ -115,104 +80,66 @@ pub enum LlmProvider {
 ## 3. Audio Capture and FFT
 
 ### Decision
-Use CPAL for cross-platform audio capture → Ring buffer → rustfft with Hann windowing → Shader uniforms.
+
+| Component | Crate |
+|-----------|-------|
+| Audio Input | **cpal** |
+| FFT | **realfft** (wraps rustfft) |
 
 ### Rationale
-- **CPAL**: The only actively maintained cross-platform audio I/O library for Rust (Windows/WASAPI, macOS/CoreAudio, Linux/ALSA)
-- **rustfft**: Fast FFT (~170µs for 4096 samples), well-maintained
-- **Ring buffer decoupling**: Audio callbacks run on real-time thread; render loop on main thread. Use `ringbuf` crate for lock-free SPSC communication.
 
-### Alternatives Considered
-| Alternative | Verdict |
-|-------------|---------|
-| `spectrum-analyzer` crate | Good alternative—wraps FFT + windowing. Consider for simpler API. |
-| `microfft` | Fastest (~90µs), but less flexible |
-| TinyAudio | Simpler but output-only; no input capture |
-| PortAudio bindings | Abandoned/poorly maintained in Rust |
+**cpal over rodio:**
+- **cpal** is the low-level cross-platform audio I/O library (macOS CoreAudio, Windows WASAPI, Linux ALSA)
+- **rodio** is high-level *playback* only—it wraps cpal but has no input capture API
+- cpal provides direct access to audio input streams with configurable buffer sizes
 
-### Key Implementation Notes
+**realfft over rustfft directly:**
+- `realfft` is a wrapper for `rustfft` optimized for real-valued signals (audio)
+- Produces N/2+1 complex outputs instead of N, halving memory/computation
+- RustFFT 6.x has AVX/NEON/WASM SIMD—faster than FFTW in benchmarks
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| Sample rate | 44100 Hz | Device default, widely supported |
-| FFT size | 2048 samples | ~46ms window @ 44.1kHz |
-| Buffer size | 512-1024 frames | ~12-23ms latency |
-| Update rate | 60 FPS | Compute FFT each frame from accumulated samples |
-| Window function | Hann | Reduces spectral leakage |
-| Frequency bins | 1024 | FFT_size / 2 |
+### Key Implementation Notes for <50ms Latency
 
-**Shader uniforms to expose:**
-- `u_audio.amplitude`: RMS or peak amplitude (f32)
-- `u_audio.bass`, `u_audio.mid`, `u_audio.treble`: Aggregated frequency bands (f32)
-- `u_audio.spectrum[64]`: Frequency magnitudes (log-scaled, 64 bands)
+1. **Buffer size:** Use 512–1024 samples at 44.1kHz → ~11–23ms per buffer
 
-**Graceful degradation:**
-```rust
-match host.default_input_device() {
-    Some(device) => { /* proceed */ }
-    None => {
-        log::warn!("No microphone available, using fallback");
-        // Return default AudioUniforms with zeros
-    }
-}
-```
+2. **Non-blocking callback:** cpal's `build_input_stream` uses a callback on a dedicated audio thread. Push samples to a lock-free ring buffer (e.g., `ringbuf` crate)
 
-**Platform notes:**
-- macOS: Requires `NSMicrophoneUsageDescription` in Info.plist
-- Linux: User must be in `audio` group for ALSA
-- Windows: Usually works; check Sound Settings if device missing
+3. **FFT on separate thread:** Consumer thread reads from ring buffer, applies Hann window, runs FFT. Avoids blocking the audio callback
+
+4. **Frequency band extraction:**
+   ```
+   bin_index = freq * fft_size / sample_rate
+   
+   Bass:   20–250 Hz   → bins 0..~6   (at 1024 FFT, 44.1kHz)
+   Mids:   250–4000 Hz → bins ~6..93
+   Treble: 4000–20kHz  → bins ~93..464
+   ```
+
+5. **Smoothing:** Exponential moving average: `smoothed = smoothed * 0.8 + new_value * 0.2`
 
 ---
 
-## 4. Streaming Generation Architecture
+## 4. WGSL Validation
 
 ### Decision
-Use `tokio::sync::mpsc` channels with `GenerationEvent` enum for streaming shaders from async generation tasks to UI.
+Use **`naga`** crate for WGSL parsing and validation.
 
 ### Rationale
-- Channels decouple generation from rendering (async LLM calls don't block render loop)
-- Events allow fine-grained progress updates (started, ready, failed, complete)
-- Over-subscription pattern spawns extra tasks to fill grid despite failures
+- naga is the official WebGPU shader translator used by wgpu
+- Validates WGSL syntax and semantics before shader compilation
+- Provides detailed error messages for LLM retry feedback
+- Already a transitive dependency of wgpu
 
-### Key Implementation Notes
-
-**Event types:**
+### Implementation
 ```rust
-pub enum GenerationEvent {
-    GenerationStarted { total_slots: usize },
-    SpecimenReady { index: usize, specimen: Specimen },
-    SpecimenFailed { index: usize, error: String },
-    GenerationComplete { filled: usize, failed: usize },
-}
-```
+use naga::front::wgsl;
+use naga::valid::{Validator, Capabilities};
 
-**Controller pattern:**
-```rust
-pub struct GenerationController {
-    llm_client: Arc<dyn LlmClient>,
-    config: GenerationConfig,
-}
-
-impl GenerationController {
-    pub fn start_generation(&self, ...) -> mpsc::Receiver<GenerationEvent> {
-        let (tx, rx) = mpsc::channel(32);
-        // Spawn over-subscribed tasks
-        for i in 0..(grid_size + over_subscribe) {
-            tokio::spawn(self.generate_one(i, tx.clone(), ...));
-        }
-        rx
-    }
-}
-```
-
-**UI integration (Iced):**
-```rust
-fn subscription(&self) -> Subscription<Message> {
-    if let Some(rx) = &self.generation_receiver {
-        Subscription::run_with_id("generation", stream_events(rx.clone()))
-    } else {
-        Subscription::none()
-    }
+fn validate_wgsl(source: &str) -> Result<(), String> {
+    let module = wgsl::parse_str(source).map_err(|e| e.emit_to_string(source))?;
+    let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
+    validator.validate(&module).map_err(|e| format!("{:?}", e))?;
+    Ok(())
 }
 ```
 
@@ -221,52 +148,58 @@ fn subscription(&self) -> Subscription<Message> {
 ## 5. Configuration Management
 
 ### Decision
-Use TOML configuration file with sensible defaults, loaded via `toml` + `serde` crates.
+Use **`toml`** + **`serde`** for config.toml parsing, with **`directories`** crate for platform-appropriate paths.
 
 ### Rationale
-- TOML is human-readable and Rust-native (Cargo uses it)
-- Serde provides automatic deserialization
-- Supports environment variable overrides for secrets (API keys)
+- Constitution specifies TOML configuration
+- serde provides derive-based deserialization
+- directories crate handles XDG/Windows/macOS config paths correctly
 
-### Key Implementation Notes
-
-**Config file location (priority order):**
-1. `./config.toml` (project directory)
-2. `~/.config/shaderjoy/config.toml` (XDG)
-3. Built-in defaults
-
-**Sample config.toml:**
-```toml
-[ui]
-grid_size = 3
-theme = "dark"
-
-[generation]
-provider = "openai"
-model = "gpt-4o-mini"
-max_retries = 3
-timeout_secs = 30
-concurrency = 12
-
-[generation.ollama]
-base_url = "http://127.0.0.1:11434"
-
-[storage]
-backend = "filesystem"
-path = "./shaders"
-
-[audio]
-enabled = true
-fft_size = 2048
-```
-
-**Environment variable overrides:**
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `GOOGLE_API_KEY`
+### Config Location Priority
+1. `./config.toml` (working directory)
+2. `$XDG_CONFIG_HOME/shaderjoy/config.toml` (Linux)
+3. `~/Library/Application Support/shaderjoy/config.toml` (macOS)
+4. `%APPDATA%\shaderjoy\config.toml` (Windows)
 
 ---
 
-## Summary
+## 6. Session Persistence
 
-All technical decisions are resolved. No NEEDS CLARIFICATION items remain. Ready for Phase 1: Design & Contracts.
+### Decision
+File-based storage with JSON metadata alongside WGSL files.
+
+### Rationale
+- Simple, inspectable, version-control friendly
+- No database dependency
+- Matches spec requirement for `shaders/{session}/step{N}.wgsl` structure
+
+### Directory Structure
+```
+shaders/
+└── my-plasma/
+    ├── metadata.json      # Session metadata (prompt, timestamps, generation count)
+    ├── step1.wgsl
+    ├── step1.json         # Per-step metadata (parent ID, mutation type)
+    ├── step2.wgsl
+    ├── step2.json
+    └── final.wgsl         # Symlink or copy of last step
+```
+
+---
+
+## Summary of Crate Choices
+
+| Dependency | Purpose | Justification |
+|------------|---------|---------------|
+| `iced` (0.14, wgpu feature) | UI framework | First-class shader widget support |
+| `wgpu` | GPU rendering | Via Iced, cross-platform WebGPU |
+| `naga` | WGSL validation | Already in wgpu, official validator |
+| `genai` | Multi-provider LLM | Unified API for OpenAI/Anthropic/Google/Ollama |
+| `tokio` | Async runtime | LLM I/O, streaming |
+| `cpal` | Audio input | Cross-platform, low-level control |
+| `realfft` | FFT processing | Optimized for real signals |
+| `ringbuf` | Lock-free queue | Audio thread → FFT thread |
+| `serde` + `toml` | Configuration | Derive-based TOML parsing |
+| `directories` | Config paths | Platform-appropriate locations |
+| `uuid` | Specimen IDs | Unique identification |
+| `chrono` | Timestamps | Session/specimen metadata |

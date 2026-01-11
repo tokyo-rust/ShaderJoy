@@ -1,80 +1,193 @@
 # Data Model: ShaderJoy v2.0
 
-**Date**: 2025-01-10  
-**Branch**: `001-shaderjoy-v2-reimpl`
+**Generated**: 2025-01-11
 
 ## Entity Relationship Diagram
 
 ```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│   AppConfig     │       │ GenerationSession│      │    Specimen     │
-├─────────────────┤       ├─────────────────┤       ├─────────────────┤
-│ ui: UiConfig    │       │ id: Uuid        │◄──────│ id: Uuid        │
-│ generation:     │       │ name: String?   │   1:N │ session_id: Uuid│
-│   GenConfig     │       │ created_at: Time│       │ parent_id: Uuid?│
-│ storage:        │       │ is_saved: bool  │       │ code: String    │
-│   StorageConfig │       │ final_id: Uuid? │       │ prompt_words:   │
-│ audio:          │       └─────────────────┘       │   Vec<String>   │
-│   AudioConfig   │                                 │ generation: u32 │
-└─────────────────┘                                 │ created_at: Time│
-                                                    │ is_final: bool  │
-                                                    └─────────────────┘
-                                                           │
-                                                           │ self-ref
-                                                           ▼
-                                                    ┌─────────────────┐
-                                                    │    Lineage      │
-                                                    ├─────────────────┤
-                                                    │ Specimen chain  │
-                                                    │ via parent_id   │
-                                                    └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                       AppConfig                              │
+│  (singleton, loaded from config.toml)                       │
+├─────────────────────────────────────────────────────────────┤
+│  - llm_provider: LlmProvider                                │
+│  - grid_size: (u32, u32)                                    │
+│  - generation: GenerationConfig                             │
+│  - storage: StorageConfig                                   │
+│  - audio: AudioConfig                                       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ configures
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    GenerationSession                         │
+│  (one active per app instance)                              │
+├─────────────────────────────────────────────────────────────┤
+│  - id: Uuid                                                 │
+│  - name: Option<String>                                     │
+│  - prompt_words: Vec<String>                                │
+│  - specimens: Vec<Specimen>                                 │
+│  - current_generation: u32                                  │
+│  - created_at: DateTime<Utc>                                │
+│  - saved: bool                                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ contains 1..*
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        Specimen                              │
+│  (individual shader instance)                               │
+├─────────────────────────────────────────────────────────────┤
+│  - id: Uuid                                                 │
+│  - wgsl_code: String                                        │
+│  - prompt_words: Vec<String>                                │
+│  - generation: u32                                          │
+│  - parent_id: Option<Uuid>                                  │
+│  - mutation_type: Option<MutationType>                      │
+│  - created_at: DateTime<Utc>                                │
+│  - status: SpecimenStatus                                   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ receives
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     ShaderUniforms                           │
+│  (passed to all shaders each frame)                         │
+├─────────────────────────────────────────────────────────────┤
+│  - time: f32                                                │
+│  - resolution: [f32; 2]                                     │
+│  - mouse: [f32; 4]                                          │
+│  - frame: u32                                               │
+│  - audio: AudioUniforms                                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ contains
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     AudioUniforms                            │
+│  (computed from audio input each frame)                     │
+├─────────────────────────────────────────────────────────────┤
+│  - amplitude: f32                                           │
+│  - bass: f32                                                │
+│  - mid: f32                                                 │
+│  - treble: f32                                              │
+│  - spectrum: [f32; 64]                                      │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Core Entities
+## Entity Definitions
 
 ### Specimen
 
-A generated shader with evolution metadata.
+A generated shader with full lineage tracking.
 
-| Field | Type | Constraints | Description |
-|-------|------|-------------|-------------|
-| `id` | UUID | PK, not null | Unique identifier |
-| `session_id` | UUID | FK → GenerationSession | Session this specimen belongs to |
-| `parent_id` | UUID? | FK → Specimen (self) | Parent specimen for mutations (null for generation 1) |
-| `code` | String | not null, valid WGSL | The WGSL fragment shader code |
-| `prompt_words` | Vec\<String\> | not null | Words used to generate this shader |
-| `generation` | u32 | not null, ≥1 | Evolution generation number |
-| `created_at` | DateTime | not null | When the specimen was created |
-| `is_final` | bool | not null, default false | Whether this is the saved final shader |
+| Field | Type | Description | Validation |
+|-------|------|-------------|------------|
+| `id` | `Uuid` | Unique identifier | Auto-generated |
+| `wgsl_code` | `String` | Validated WGSL fragment shader source | Must pass naga validation |
+| `prompt_words` | `Vec<String>` | Words used for generation | Non-empty for gen 0 |
+| `generation` | `u32` | Evolution generation number (0 = initial) | >= 0 |
+| `parent_id` | `Option<Uuid>` | Parent specimen for mutations | None for gen 0, Some for gen > 0 |
+| `mutation_type` | `Option<MutationType>` | How this was derived from parent | None for gen 0 |
+| `created_at` | `DateTime<Utc>` | Creation timestamp | Auto-set |
+| `status` | `SpecimenStatus` | Current state in generation pipeline | Valid enum value |
 
-**Validation Rules:**
-- `code` must pass naga WGSL validation before creation
-- `generation` increments from parent (parent.generation + 1)
-- `parent_id` must reference existing Specimen if not null
+```rust
+pub struct Specimen {
+    pub id: Uuid,
+    pub wgsl_code: String,
+    pub prompt_words: Vec<String>,
+    pub generation: u32,
+    pub parent_id: Option<Uuid>,
+    pub mutation_type: Option<MutationType>,
+    pub created_at: DateTime<Utc>,
+    pub status: SpecimenStatus,
+}
+```
+
+---
+
+### SpecimenStatus
+
+State machine for specimen lifecycle.
+
+```rust
+pub enum SpecimenStatus {
+    Generating,      // LLM request in flight
+    Validating,      // Received, running naga validation
+    Valid,           // Passed validation, ready to render
+    Invalid,         // Failed validation, will retry
+    Failed,          // Exhausted retries
+    Selected,        // User selected as parent for next generation
+}
+```
 
 **State Transitions:**
-- Created → Validated → Displayed → Selected (becomes parent) → Evolved
-- Created → Failed (discarded, not persisted)
+```
+Generating → Validating (LLM response received)
+Validating → Valid (naga passes)
+Validating → Invalid (naga fails)
+Invalid → Generating (retry attempt)
+Invalid → Failed (max retries exceeded)
+Valid → Selected (user clicks)
+```
+
+---
+
+### MutationType
+
+Types of code transformations applied during evolution.
+
+```rust
+pub enum MutationType {
+    LlmMutation,           // LLM-suggested code changes
+    OperatorSwap,          // sin↔cos, +↔*, etc.
+    ConstantTweak,         // Modify numeric constants
+    ColorChannelSwap,      // Swap RGB channels
+    BlockInsert,           // Add new shader code block
+    BlockRemove,           // Remove shader code block
+    Crossover,             // Combine fragments from two parents
+}
+```
 
 ---
 
 ### GenerationSession
 
-A collection of specimens from one evolution session.
+A collection of specimens representing one evolution session.
 
-| Field | Type | Constraints | Description |
-|-------|------|-------------|-------------|
-| `id` | UUID | PK, not null | Unique identifier |
-| `name` | String? | unique if not null | User-provided session name for saving |
-| `created_at` | DateTime | not null | When session started |
-| `is_saved` | bool | not null, default false | Whether session was saved to storage |
-| `final_specimen_id` | UUID? | FK → Specimen | The specimen marked as final |
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `Uuid` | Session identifier |
+| `name` | `Option<String>` | User-provided name for saving |
+| `prompt_words` | `Vec<String>` | Initial prompt words |
+| `specimens` | `Vec<Specimen>` | All specimens in session |
+| `current_generation` | `u32` | Current evolution generation |
+| `created_at` | `DateTime<Utc>` | Session start time |
+| `saved` | `bool` | Whether session has been persisted |
 
-**Validation Rules:**
-- `name` must be filesystem-safe (alphanumeric, hyphens, underscores)
-- `final_specimen_id` must belong to this session
+```rust
+pub struct GenerationSession {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub prompt_words: Vec<String>,
+    pub specimens: Vec<Specimen>,
+    pub current_generation: u32,
+    pub created_at: DateTime<Utc>,
+    pub saved: bool,
+}
+
+impl GenerationSession {
+    pub fn specimens_for_generation(&self, gen: u32) -> Vec<&Specimen> {
+        self.specimens.iter().filter(|s| s.generation == gen).collect()
+    }
+    
+    pub fn selected_specimen(&self) -> Option<&Specimen> {
+        self.specimens.iter().find(|s| s.status == SpecimenStatus::Selected)
+    }
+}
+```
 
 ---
 
@@ -82,156 +195,183 @@ A collection of specimens from one evolution session.
 
 Application configuration loaded from TOML.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `ui` | UiConfig | see below | UI settings |
-| `generation` | GenerationConfig | see below | LLM and generation settings |
-| `storage` | StorageConfig | see below | Persistence settings |
-| `audio` | AudioConfig | see below | Audio capture settings |
+```rust
+pub struct AppConfig {
+    pub llm_provider: LlmProvider,
+    pub grid_size: GridSize,
+    pub generation: GenerationConfig,
+    pub storage: StorageConfig,
+    pub audio: AudioConfig,
+}
 
----
+pub struct GridSize {
+    pub rows: u32,    // default: 3
+    pub cols: u32,    // default: 3
+}
 
-### UiConfig
+pub struct GenerationConfig {
+    pub concurrency: u32,         // default: 12 (over-subscribe 3-4x to handle ~30% failure)
+    pub max_retries: u32,         // default: 3 (total attempts per slot)
+    pub backoff_base_ms: u64,     // default: 1000 (initial retry delay)
+    pub backoff_multiplier: f32,  // default: 2.0 (exponential: 1s, 2s, 4s, ...)
+    pub timeout_seconds: u32,     // default: 30 (per-slot generation timeout)
+}
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `grid_size` | u8 | 3 | Grid dimensions (3 = 3×3) |
-| `theme` | String | "dark" | UI theme |
+pub struct StorageConfig {
+    pub shaders_dir: PathBuf,     // default: ./shaders
+}
 
----
-
-### GenerationConfig
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `provider` | LlmProvider | OpenAI | Active LLM provider |
-| `model` | String | "gpt-4o-mini" | Model identifier |
-| `max_retries` | u8 | 3 | Max retry attempts per specimen |
-| `timeout_secs` | u32 | 30 | Timeout per generation attempt |
-| `concurrency` | u8 | 12 | Concurrent generation tasks |
-| `over_subscribe_ratio` | f32 | 1.5 | Extra tasks to spawn (grid × ratio) |
-| `ollama_base_url` | String? | "http://127.0.0.1:11434" | Ollama endpoint |
-
----
-
-### LlmProvider (Enum)
-
-| Variant | API Key Env Var | Description |
-|---------|-----------------|-------------|
-| OpenAI | `OPENAI_API_KEY` | OpenAI GPT models |
-| Anthropic | `ANTHROPIC_API_KEY` | Claude models |
-| Google | `GOOGLE_API_KEY` | Gemini models |
-| Ollama | (none) | Local Ollama instance |
-
----
-
-### StorageConfig
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `backend` | StorageBackend | Filesystem | Storage type |
-| `path` | String | "./shaders" | Directory for filesystem storage |
-| `database_url` | String? | None | Database connection string |
-
----
-
-### StorageBackend (Enum)
-
-| Variant | Description |
-|---------|-------------|
-| Filesystem | Save to directories with .wgsl files |
-| Database | SQLite or PostgreSQL via SeaORM |
-
----
-
-### AudioConfig
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | true | Enable audio capture |
-| `fft_size` | u16 | 2048 | FFT window size |
-| `spectrum_bands` | u8 | 64 | Number of frequency bands for shaders |
-
----
-
-### ShaderUniforms
-
-Uniform data passed to every shader.
-
-| Field | Type | WGSL Name | Description |
-|-------|------|-----------|-------------|
-| `time` | f32 | `u_time` | Seconds since shader started |
-| `resolution` | vec2\<f32\> | `u_resolution` | Viewport width/height in pixels |
-| `mouse` | vec4\<f32\> | `u_mouse` | Mouse position and click state |
-| `frame` | u32 | `u_frame` | Frame counter |
-
----
-
-### AudioUniforms
-
-Audio data passed to shaders when audio is enabled.
-
-| Field | Type | WGSL Name | Description |
-|-------|------|-----------|-------------|
-| `amplitude` | f32 | `u_audio.amplitude` | Overall amplitude (0.0-1.0) |
-| `bass` | f32 | `u_audio.bass` | Low frequency energy |
-| `mid` | f32 | `u_audio.mid` | Mid frequency energy |
-| `treble` | f32 | `u_audio.treble` | High frequency energy |
-| `spectrum` | [f32; 64] | `u_audio.spectrum` | Frequency spectrum (log-scaled) |
-
----
-
-## Filesystem Storage Format
-
-```
-shaders/
-└── {session-name}/
-    ├── step1.wgsl       # First selected shader
-    ├── step1.json       # Metadata
-    ├── step2.wgsl       # Second generation selected
-    ├── step2.json
-    ├── step3.wgsl
-    ├── step3.json
-    ├── final.wgsl       # Copy of last step (for easy access)
-    └── final.json
-```
-
-**Metadata JSON format:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "parent_id": "550e8400-e29b-41d4-a716-446655440001",
-  "prompt_words": ["plasma", "fire", "nebula"],
-  "generation": 3,
-  "created_at": "2025-01-10T15:30:00Z"
+pub struct AudioConfig {
+    pub enabled: bool,            // default: true
+    pub buffer_size: u32,         // default: 1024
+    pub smoothing: f32,           // default: 0.8
 }
 ```
 
 ---
 
-## Database Schema (SeaORM)
+### LlmProvider
 
-```sql
-CREATE TABLE sessions (
-    id UUID PRIMARY KEY,
-    name VARCHAR(255) UNIQUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    is_saved BOOLEAN NOT NULL DEFAULT FALSE,
-    final_specimen_id UUID REFERENCES shaders(id)
-);
+Configuration for a specific LLM provider.
 
-CREATE TABLE shaders (
-    id UUID PRIMARY KEY,
-    session_id UUID NOT NULL REFERENCES sessions(id),
-    parent_id UUID REFERENCES shaders(id),
-    code TEXT NOT NULL,
-    prompt_words JSONB NOT NULL,
-    generation INTEGER NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    is_final BOOLEAN NOT NULL DEFAULT FALSE
-);
+```rust
+pub struct LlmProvider {
+    pub kind: ProviderKind,
+    pub model: String,
+    pub api_key: Option<String>,   // None for Ollama
+    pub endpoint: Option<String>,  // Custom endpoint override
+}
 
-CREATE INDEX idx_shaders_session ON shaders(session_id);
-CREATE INDEX idx_shaders_parent ON shaders(parent_id);
-CREATE INDEX idx_shaders_created ON shaders(created_at DESC);
+pub enum ProviderKind {
+    OpenAI,
+    Anthropic,
+    Google,
+    Ollama,
+}
+```
+
+**TOML Example:**
+```toml
+[llm_provider]
+kind = "OpenAI"
+model = "gpt-4o"
+api_key = "${OPENAI_API_KEY}"  # environment variable substitution
+```
+
+---
+
+### ShaderUniforms
+
+Standard uniforms passed to all shaders.
+
+```rust
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ShaderUniforms {
+    pub time: f32,
+    pub frame: u32,
+    pub resolution: [f32; 2],
+    pub mouse: [f32; 4],      // xy = position, zw = click position
+    pub audio: AudioUniforms,
+}
+```
+
+---
+
+### AudioUniforms
+
+Processed audio data for shaders.
+
+```rust
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct AudioUniforms {
+    pub amplitude: f32,   // Overall loudness (0.0 - 1.0)
+    pub bass: f32,        // Low frequency energy (20-250 Hz)
+    pub mid: f32,         // Mid frequency energy (250-4000 Hz)
+    pub treble: f32,      // High frequency energy (4000-20000 Hz)
+    pub spectrum: [f32; 64],  // FFT bins for detailed visualization
+}
+
+impl Default for AudioUniforms {
+    fn default() -> Self {
+        Self {
+            amplitude: 0.0,
+            bass: 0.0,
+            mid: 0.0,
+            treble: 0.0,
+            spectrum: [0.0; 64],
+        }
+    }
+}
+```
+
+---
+
+## Persistence Format
+
+### Session Directory Structure
+
+```
+shaders/
+└── {session-name}/
+    ├── session.json          # GenerationSession metadata
+    ├── gen0/
+    │   ├── specimen-{id}.wgsl
+    │   └── specimen-{id}.json
+    ├── gen1/
+    │   ├── specimen-{id}.wgsl
+    │   └── specimen-{id}.json
+    └── final.wgsl            # Copy of last selected specimen
+```
+
+## Generation Control & Over-Subscription
+
+### Streaming Generation Pattern
+
+The generation controller implements the following flow to achieve streaming UI updates and high fill rates:
+
+1. **Over-subscribe**: Spawn `concurrency` generation tasks (default: 12) to fill grid slots (default: 9)
+2. **Validate as ready**: Each task that validates successfully emits to the UI immediately
+3. **Fill first N**: Once N valid shaders are ready (where N = grid_rows × grid_cols), cancel remaining in-flight generations
+4. **Retry on failure**: If a task fails validation, retry up to `max_retries` times with exponential backoff before abandoning
+5. **Partial fill**: If fewer than N succeed before timeout, render with the successes available
+
+### Backoff Formula
+
+For retry N (0-indexed):
+```
+delay_ms = backoff_base_ms * (backoff_multiplier ^ N)
+```
+
+Example (1000ms base, 2.0 multiplier):
+- Attempt 0: immediate
+- Retry 1: wait 1000ms
+- Retry 2: wait 2000ms
+- Retry 3: wait 4000ms
+
+### session.json Schema
+
+```json
+{
+  "id": "uuid",
+  "name": "my-plasma",
+  "prompt_words": ["plasma", "fire", "nebula"],
+  "current_generation": 3,
+  "created_at": "2025-01-11T10:30:00Z",
+  "specimen_count": 27
+}
+```
+
+### specimen-{id}.json Schema
+
+```json
+{
+  "id": "uuid",
+  "generation": 1,
+  "parent_id": "uuid-of-parent",
+  "mutation_type": "LlmMutation",
+  "prompt_words": ["plasma", "fire", "nebula"],
+  "created_at": "2025-01-11T10:31:00Z"
+}
 ```

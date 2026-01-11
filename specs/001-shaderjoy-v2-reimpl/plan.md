@@ -10,21 +10,23 @@ Complete reimplementation of ShaderJoy - an evolutionary shader playground where
 ## Technical Context
 
 **Language/Version**: Rust 1.75+  
-**Primary Dependencies**: 
+**Primary Dependencies**:
+
 - wgpu 0.19+ (GPU rendering, WebGPU/Metal/Vulkan/DirectX backends)
-- Iced 0.12+ (cross-platform UI, replaces egui)
+- Iced 0.14+ (cross-platform UI with shader widget support, replaces egui)
 - tokio 1.x (async runtime for LLM calls)
-- llm crate (multi-provider LLM abstraction with Ollama support)
+- genai (multi-provider LLM abstraction: OpenAI, Anthropic, Google, Ollama)
 - naga (WGSL validation)
 - cpal (audio capture)
-- rustfft (frequency analysis)
+- realfft (frequency analysis via FFT)
+- ringbuf (lock-free queue for audio threading)
 - serde/toml (configuration)
-- sea-orm (optional database persistence)
+- directories (platform-appropriate config paths)
 - chrono, uuid (metadata)
 
-**Storage**: 
-- Primary: Filesystem (`./shaders/{session-name}/step{N}.wgsl`, `final.wgsl`)
-- Optional: SQLite via SeaORM for lineage queries and session management
+**Storage**:
+
+- Primary: Filesystem with JSON metadata (`./shaders/{session-name}/genN/specimen-{id}.wgsl`, `metadata.json`) or SQlite database via SeaORM
 
 **Testing**: cargo test (unit), manual visual testing for rendering (per constitution)
 
@@ -32,14 +34,15 @@ Complete reimplementation of ShaderJoy - an evolutionary shader playground where
 
 **Project Type**: Rust workspace with multiple crates
 
-**Performance Goals**: 
-- 60 FPS rendering for 3x3 shader grid
+**Performance Goals**:
+
+- 30 FPS rendering for 3x3 shader grid
 - First shader visible in <5 seconds
 - Mutation latency <100ms (random), <2s (LLM-assisted)
 - 80%+ grid fill rate with 30% failure tolerance
 
-**Constraints**: 
-- <500 MB baseline memory, <2 GB with shader cache
+**Constraints**:
+
 - Async LLM calls must never block render loop
 - WebGPU required (no WebGL fallback)
 
@@ -54,10 +57,10 @@ Complete reimplementation of ShaderJoy - an evolutionary shader playground where
 | **I. Human-in-the-Loop Primacy** | ✅ PASS | Core loop preserved: watch → select → mutate → watch. Selection is single-click, streaming provides <5s feedback. No automated optimization. |
 | **II. Aesthetic Expression Over Correctness** | ✅ PASS | WGSL validation via naga ensures shaders compile, but no aesthetic filtering. "Broken" but beautiful shaders retained. |
 | **III. GPU-First, Simple CPU Logic** | ✅ PASS | All rendering on GPU via wgpu. CPU handles only mutation orchestration, LLM I/O, and UI. Async tokio prevents render blocking. |
-| **IV. Code Mutations as Primary Evolution Engine** | ⚠️ TENSION | Spec emphasizes LLM generation. Constitution says "Random mutations + optional LLM suggestions, never pure LLM generation." **Resolution**: LLM generates initial shaders from prompts, but evolution/mutation remains code-based with LLM as optional assistant. |
+| **IV. Code Mutations as Primary Evolution Engine** | ✅ PASS | Spec uses LLM for initial generation from word prompts (FR-001), but evolution via parent-based mutation (FR-006) with code transformations. LLM is supplemental for both initial and evolved generation, not the primary driver. |
 | **V. Simplicity & Iteration** | ✅ PASS | Single binary (`cargo run -p shaderjoy-desktop`), config via TOML, shader grid is primary interface. Workspace crates justified by separation of concerns. |
 
-**Gate Result**: PASS with noted tension on Principle IV. The spec uses LLM for initial generation (from word prompts), which is acceptable. Evolution mutations will incorporate code-level transformations with optional LLM suggestions, preserving the constitution's intent.
+**Gate Result**: PASS. All principles are satisfied. Spec fully aligns with constitution's human-centric, code-mutation-driven approach.
 
 ## Project Structure
 
@@ -156,8 +159,9 @@ shaderjoy/
 
 ## Complexity Tracking
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
+| Complexity | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| Multi-crate workspace (6 crates) | Separation of platform-agnostic core from UI/rendering enables future web target and testability | Single crate would couple rendering to UI and prevent headless testing |
-| LLM for initial generation | Users specify word prompts, not shader code | Constitution allows LLM as "optional and supplemental"; pure random mutation from nothing is not user-friendly |
-| Iced replaces egui | Iced provides better wgpu integration for custom shader widgets and cross-platform consistency | egui lacks native wgpu widget support for multi-viewport shader rendering |
+| Multi-crate workspace (3 primary crates) | Separation of platform-agnostic core from UI/rendering enables future web target and testability | Single crate would couple rendering to UI and prevent headless testing |
+| LLM for initial generation | Users specify word prompts, not shader code; constitution allows LLM as optional/supplemental | Pure random mutation from nothing is not user-friendly; LLM guide is reasonable starting point |
+| Iced 0.14+ with shader widget | First-class wgpu integration via `iced::widget::shader`; idiomatic multi-viewport shader rendering | Manual wgpu lifecycle management adds significant complexity; Bevy is overkill for single-user tool |
+| genai over custom per-provider SDKs | Single unified API for 4+ providers; streaming support; actively maintained | Rolling custom client per provider (OpenAI SDK, Anthropic SDK, etc.) increases maintenance burden |

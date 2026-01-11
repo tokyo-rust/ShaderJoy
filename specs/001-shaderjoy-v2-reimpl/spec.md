@@ -9,7 +9,7 @@
 
 ### User Story 1 - Generate and Evolve Shaders (Priority: P1)
 
-Users want to generate WGSL shaders from word prompts and evolve them through aesthetic selection. They type a prompt like "plasma fire nebula", see a grid of generated shaders rendering in real-time, select their favorites, and iterate to refine the visual output.
+Users want to generate WGSL shaders from word prompts and evolve them through aesthetic selection. They optionally type a prompt, or if not just internal details of the prompt to generate shaders cause variance with no guidance, like "plasma fire nebula", see a grid of generated shaders rendering in real-time, select their favorite, and then the process is repeated with this shader as a parent and some random variance in prompt by to refine the visual output.
 
 **Why this priority**: This is the core value proposition - the evolutionary shader playground experience. Without this, there is no product.
 
@@ -105,11 +105,11 @@ Users want a native desktop application that works on Windows, macOS, and Linux 
 
 ### Edge Cases
 
-- What happens when the LLM returns invalid WGSL? System retries with exponential backoff up to the configured maximum attempts.
-- What happens when all retry attempts fail? The grid slot shows a failure indicator; other slots continue independently.
+- What happens when the LLM returns invalid WGSL? System retries with exponential backoff up to the configured maximum attempts.  In order to get ahead of this, more shaders than needed (number in the grid: GridSize) are requested and failures are discarded in favor of successes until GridSize successes are generated.
+- What happens when after all retry attempts fail there still arent GridSize shaders? Then the number of successes we do have renders.
 - What happens when the network is unavailable for cloud providers? Clear error message shown; user can switch to Ollama if configured.
-- What happens when audio input permission is denied? Audio features degrade gracefully; shaders receive zero/default audio values.
-- What happens when the shader directory is read-only? Save operation fails with clear error message about permissions.
+- What happens when audio input permission is denied? Audio features degrade gracefully with an informational message; shaders receive zero/default audio values.
+- What happens when the shader directory is read-only? Save operation fails with clear error message about permissions.  This should be checked before generation to prevent frustration.
 
 ## Requirements *(mandatory)*
 
@@ -117,12 +117,12 @@ Users want a native desktop application that works on Windows, macOS, and Linux 
 
 - **FR-001**: System MUST generate valid WGSL fragment shaders from word prompts
 - **FR-002**: System MUST validate all generated WGSL via naga before rendering
-- **FR-003**: System MUST retry failed generations with exponential backoff (configurable max attempts, default 3)
-- **FR-004**: System MUST over-subscribe generation tasks to ensure the grid fills despite failures
+- **FR-003**: System MUST retry failed generations with exponential backoff (configurable max attempts, default 1)
+- **FR-004**: System MUST over-subscribe generation tasks to ensure the grid fills despite failures, cancel all in progress generations once the grid can be filled.
 - **FR-005**: System MUST stream completed shaders to the UI immediately as they validate
-- **FR-006**: System MUST support parent-based mutation (evolution) where selected shaders guide the next generation
+- **FR-006**: System MUST support parent-based mutation (evolution) where selected shaders guide the next generation.  As in the prototype this is accomplished by freezing the value of a preconfigured ratio the random words added to the prompt but randomizing the rest for the next generation.
 - **FR-007**: System MUST support OpenAI, Anthropic, Google, and Ollama LLM providers
-- **FR-008**: System MUST allow provider selection via config.toml file
+- **FR-008**: System MUST allow provider selection via config.toml file.
 - **FR-009**: System MUST handle rate limiting from LLM providers with appropriate backoff
 - **FR-010**: System MUST save shader sessions to named directories with step files and final.wgsl
 - **FR-011**: System MUST save metadata (prompt words, generation number, timestamps) alongside shaders
@@ -149,7 +149,7 @@ Users want a native desktop application that works on Windows, macOS, and Linux 
 
 ### Measurable Outcomes
 
-- **SC-001**: Users see the first shader appear within 5 seconds of starting generation (streaming validation)
+- **SC-001**: Users see the first shader appear within 10 seconds of starting generation (streaming validation)
 - **SC-002**: Grid fills to at least 80% capacity even when 30% of generation attempts fail (over-subscription validation)
 - **SC-003**: Users can complete a 3-generation evolution session and save it in under 5 minutes
 - **SC-004**: Application starts and displays the UI in under 3 seconds on standard hardware

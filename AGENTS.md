@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2026-01-11
 
 ## Active Technologies
+- Rust 1.75+ + wgpu (GPU rendering), Iced (UI framework per spec), naga (WGSL validation), tokio (async runtime), reqwest (HTTP client for LLM APIs), serde (config serialization), cpal (audio capture) (001-shaderjoy-v2-reimpl)
+- File-based (TOML config, WGSL shader files with JSON metadata) (001-shaderjoy-v2-reimpl)
 
 - Rust 1.75+ (001-shaderjoy-v2-reimpl)
 
@@ -22,6 +24,7 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust 1.75+: Follow standard conventions
 
 ## Recent Changes
+- 001-shaderjoy-v2-reimpl: Added Rust 1.75+ + wgpu (GPU rendering), Iced (UI framework per spec), naga (WGSL validation), tokio (async runtime), reqwest (HTTP client for LLM APIs), serde (config serialization), cpal (audio capture)
 
 - 001-shaderjoy-v2-reimpl: Added Rust 1.75+
 
