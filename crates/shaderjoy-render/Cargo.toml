@@ -1,0 +1,15 @@
+[package]
+name = "shaderjoy-render"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+wgpu = { version = "0.19", features = ["spirv"] }
+bytemuck = { version = "1.16", features = ["derive"] }
+tokio = { version = "1", features = ["rt", "sync"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }

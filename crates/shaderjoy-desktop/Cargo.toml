@@ -1,0 +1,18 @@
+[package]
+name = "shaderjoy-desktop"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "shaderjoy"
+path = "src/main.rs"
+
+[dependencies]
+shaderjoy-core = { path = "../shaderjoy-core" }
+shaderjoy-render = { path = "../shaderjoy-render" }
+iced = { version = "0.14", features = ["wgpu"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"

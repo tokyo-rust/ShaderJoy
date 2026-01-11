@@ -1,0 +1,1 @@
+//! LLM client trait definition.

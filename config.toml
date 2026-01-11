@@ -1,0 +1,56 @@
+# ShaderJoy v2.0 Configuration
+# All paths are relative to the repository root
+
+[llm_provider]
+# Provider kind: "OpenAI", "Anthropic", "Google", or "Ollama"
+kind = "Google"
+# Model to use per provider (see oracle research recommendations):
+#
+# OpenAI: default gpt-5-mini (fast, cheap, strong code)
+#         optional gpt-5.2 for max quality mode
+#         optional gpt-5.1-codex-max for agentic coding features
+#
+# Anthropic: default claude-sonnet-4-5 (structured code, good latency)
+#            optional claude-haiku-4-5 for fast & budget mode
+#
+# Google: gemini-2.5-flash (best price-performance, <5s latency)
+#         optional gemini-2.5-pro for heavy reasoning / multi-file GPU code
+#
+# Ollama: default deepseek-coder (code-specialized)
+#         optional llama3.1:8b for CPU-only or weak hardware
+#
+model = "gemini-2.5-flash"
+# API key (required for OpenAI, Anthropic, Google; optional for Ollama)
+# Use environment variable substitution: ${VAR_NAME}
+api_key = "${GOOGLE_API_KEY}"
+# Custom endpoint (optional, for Ollama or custom API proxies)
+# endpoint = "https://generativelanguage.googleapis.com"
+
+[grid_size]
+# Grid dimensions (rows × cols)
+rows = 3
+cols = 3
+
+[generation]
+# Number of concurrent generation tasks (over-subscribe 3-4x grid size)
+concurrency = 12
+# Maximum retry attempts per slot if validation fails
+max_retries = 3
+# Initial backoff delay in milliseconds
+backoff_base_ms = 1000
+# Exponential backoff multiplier
+backoff_multiplier = 2.0
+# Per-slot generation timeout in seconds
+timeout_seconds = 30
+
+[storage]
+# Directory where shader sessions are saved
+shaders_dir = "./shaders"
+
+[audio]
+# Enable audio input from system microphone
+enabled = true
+# Audio buffer size (samples)
+buffer_size = 1024
+# Exponential smoothing factor for audio values (0.0-1.0)
+smoothing = 0.8

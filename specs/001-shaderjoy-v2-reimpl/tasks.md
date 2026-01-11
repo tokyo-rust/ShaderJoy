@@ -19,12 +19,12 @@
 
 **Purpose**: Project initialization and workspace structure
 
-- [ ] T001 Create Cargo workspace with member crates in Cargo.toml
-- [ ] T002 [P] Create crates/shaderjoy-core/Cargo.toml with dependencies (tokio, serde, toml, uuid, chrono, thiserror, naga, genai, cpal, realfft, ringbuf, directories, tracing)
-- [ ] T003 [P] Create crates/shaderjoy-render/Cargo.toml with dependencies (wgpu, bytemuck, tokio)
-- [ ] T004 [P] Create crates/shaderjoy-desktop/Cargo.toml with dependencies (iced, tokio, tracing)
-- [ ] T005 [P] Create .gitignore for Rust workspace (target/, *.wgsl artifacts, config.toml overrides)
-- [ ] T006 Create default config.toml at repository root with all configuration sections per data-model.md (llm_provider, grid_size, generation, storage, audio)
+- [x] T001 Create Cargo workspace with member crates in Cargo.toml
+- [x] T002 [P] Create crates/shaderjoy-core/Cargo.toml with dependencies (tokio, serde, toml, uuid, chrono, thiserror, naga, genai, cpal, realfft, ringbuf, directories, tracing)
+- [x] T003 [P] Create crates/shaderjoy-render/Cargo.toml with dependencies (wgpu, bytemuck, tokio)
+- [x] T004 [P] Create crates/shaderjoy-desktop/Cargo.toml with dependencies (iced, tokio, tracing)
+- [x] T005 [P] Create .gitignore for Rust workspace (target/, *.wgsl artifacts, config.toml overrides)
+- [x] T006 Create default config.toml at repository root with all configuration sections per data-model.md (llm_provider, grid_size, generation, storage, audio)
 
 ---
 

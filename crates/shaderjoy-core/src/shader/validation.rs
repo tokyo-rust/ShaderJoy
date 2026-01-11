@@ -1,0 +1,1 @@
+//! WGSL validation via naga.

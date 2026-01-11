@@ -1,0 +1,1 @@
+//! Settings panel UI component.

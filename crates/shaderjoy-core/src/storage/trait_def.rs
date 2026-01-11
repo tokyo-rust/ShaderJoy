@@ -1,0 +1,1 @@
+//! Storage trait definitions.
