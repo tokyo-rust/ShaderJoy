@@ -2,8 +2,8 @@
 # All paths are relative to the repository root
 
 [llm_provider]
-# Provider kind: "OpenAI", "Anthropic", "Google", or "Ollama"
-kind = "Google"
+# Provider kind: "OpenAI", "Anthropic", "Gemini", or "Ollama"
+kind = "Gemini"
 # Model to use per provider (see oracle research recommendations):
 #
 # OpenAI: default gpt-5-mini (fast, cheap, strong code)

@@ -28,6 +28,7 @@ directories = "5.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }
 console-subscriber = "0.3"
+regex = "1"
 wgpu = { version = "0.19", features = ["spirv"] }
 bytemuck = { version = "1.16", features = ["derive"] }
 iced = { version = "0.14", features = ["wgpu"] }

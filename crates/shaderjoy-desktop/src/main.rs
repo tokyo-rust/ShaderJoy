@@ -1,6 +1,8 @@
 //! ShaderJoy Desktop Application Entry Point
 
 use anyhow::Result;
+use shaderjoy_core::{config::AppConfig, describe_config_paths};
+use tracing::info;
 use tracing_subscriber::{
     fmt,
     layer::{Layer, SubscriberExt},
@@ -11,7 +13,13 @@ use tracing_subscriber::{
 fn main() -> Result<()> {
     init_tracing()?;
 
-    tracing::info!("ShaderJoy v{}", env!("CARGO_PKG_VERSION"));
+    let (config, is_default) = AppConfig::load()?;
+    if is_default {
+        info!("Using default config");
+        info!("{}", describe_config_paths());
+    }
+
+    info!("Using Config: {:#?}", config);
 
     Ok(())
 }
@@ -33,6 +41,8 @@ fn init_tracing() -> Result<()> {
                 .with_filter(env_filter),
         )
         .init();
+
+    info!("ShaderJoy v{}", env!("CARGO_PKG_VERSION"));
 
     Ok(())
 }

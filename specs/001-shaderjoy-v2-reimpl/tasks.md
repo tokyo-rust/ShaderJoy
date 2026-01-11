@@ -34,23 +34,23 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T007 Define core error types in crates/shaderjoy-core/src/error.rs (thiserror-based, include LLM, validation, storage, audio errors)
-- [ ] T008 [P] Define ProviderKind enum in crates/shaderjoy-core/src/llm/mod.rs (OpenAI, Anthropic, Google, Ollama)
-- [ ] T009 [P] Define LlmProvider struct in crates/shaderjoy-core/src/llm/mod.rs per data-model.md
-- [ ] T010 [P] Define StorageConfig and AudioConfig structs in crates/shaderjoy-core/src/config.rs
-- [ ] T011 Define AppConfig struct in crates/shaderjoy-core/src/config.rs with GridSize, GenerationConfig per data-model.md
-- [ ] T012 Implement config loading from TOML with environment variable substitution in crates/shaderjoy-core/src/config.rs
-- [ ] T013 Define Specimen struct in crates/shaderjoy-core/src/generation/specimen.rs per data-model.md (id, wgsl_code, prompt_words, generation, parent_id, mutation_type, created_at, status)
-- [ ] T014 Define SpecimenStatus enum in crates/shaderjoy-core/src/generation/specimen.rs (Generating, Validating, Valid, Invalid, Failed, Selected)
-- [ ] T015 Define MutationType enum in crates/shaderjoy-core/src/generation/specimen.rs
-- [ ] T016 Define GenerationSession struct in crates/shaderjoy-core/src/generation/mod.rs per data-model.md with helper methods
-- [ ] T017 [P] Define ShaderUniforms struct in crates/shaderjoy-core/src/shader/uniforms.rs (#[repr(C)], time, resolution, mouse, frame, audio)
-- [ ] T018 [P] Define AudioUniforms struct in crates/shaderjoy-core/src/audio/mod.rs per data-model.md (amplitude, bass, mid, treble, spectrum[64])
-- [ ] T019 Implement WGSL validation via naga in crates/shaderjoy-core/src/shader/validation.rs (parse, validate, return detailed errors)
-- [ ] T020 Create crates/shaderjoy-core/src/llm/mod.rs with public module exports
-- [ ] T021 Create crates/shaderjoy-core/src/lib.rs exporting all public modules (generation, llm, shader, audio, storage, config, error)
-- [ ] T022 Create crates/shaderjoy-render/src/lib.rs with placeholder exports
-- [ ] T023 Verify workspace builds with `cargo check --workspace`
+- [x] T007 Define core error types in crates/shaderjoy-core/src/error.rs (thiserror-based, include LLM, validation, storage, audio errors)
+- [x] T008 [P] Define ProviderKind enum in crates/shaderjoy-core/src/llm/mod.rs (OpenAI, Anthropic, Google, Ollama)
+- [x] T009 [P] Define LlmProvider struct in crates/shaderjoy-core/src/llm/mod.rs per data-model.md
+- [x] T010 [P] Define StorageConfig and AudioConfig structs in crates/shaderjoy-core/src/config.rs
+- [x] T011 Define AppConfig struct in crates/shaderjoy-core/src/config.rs with GridSize, GenerationConfig per data-model.md
+- [x] T012 Implement config loading from TOML with environment variable substitution in crates/shaderjoy-core/src/config.rs
+- [x] T013 Define Specimen struct in crates/shaderjoy-core/src/generation/specimen.rs per data-model.md (id, wgsl_code, prompt_words, generation, parent_id, mutation_type, created_at, status)
+- [x] T014 Define SpecimenStatus enum in crates/shaderjoy-core/src/generation/specimen.rs (Generating, Validating, Valid, Invalid, Failed, Selected)
+- [x] T015 Define MutationType enum in crates/shaderjoy-core/src/generation/specimen.rs
+- [x] T016 Define GenerationSession struct in crates/shaderjoy-core/src/generation/mod.rs per data-model.md with helper methods
+- [x] T017 [P] Define ShaderUniforms struct in crates/shaderjoy-core/src/shader/uniforms.rs (#[repr(C)], time, resolution, mouse, frame, audio)
+- [x] T018 [P] Define AudioUniforms struct in crates/shaderjoy-core/src/audio/mod.rs per data-model.md (amplitude, bass, mid, treble, spectrum[64])
+- [x] T019 Implement WGSL validation via naga in crates/shaderjoy-core/src/shader/validation.rs (parse, validate, return detailed errors)
+- [x] T020 Create crates/shaderjoy-core/src/llm/mod.rs with public module exports
+- [x] T021 Create crates/shaderjoy-core/src/lib.rs exporting all public modules (generation, llm, shader, audio, storage, config, error)
+- [x] T022 Create crates/shaderjoy-render/src/lib.rs with placeholder exports
+- [x] T023 Verify workspace builds with `cargo check --workspace`
 
 **Checkpoint**: Foundation ready - user story implementation can now begin
 

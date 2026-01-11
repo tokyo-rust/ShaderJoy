@@ -19,6 +19,7 @@ realfft.workspace = true
 ringbuf.workspace = true
 directories.workspace = true
 tracing.workspace = true
+regex.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

@@ -2,6 +2,7 @@
 
 ## Features to add
 
+* Add CLAP cli along with help texts etc (eg where are the config.toml files read from in what priority), and config override.
 * Add visual feedback for shader generation progress (including messages in an expandable/optional log area)
 * Ability to load a shader by name/uuid/path/etc in fullscreen mode just to vibe with it.
 * Ability to modify prompt as specimens are generated to help guide.
@@ -12,3 +13,11 @@
 * Ability to share generated shaders with link.
 * Ability to charge users and provide LLM key for them when running as a webserver.
 * Ability to charge users and provide LLM for them when running for desktop mode.
+
+* Other kinds of parent mutation
+    // OperatorSwap,
+    // ConstantTweak,
+    // ColorChannelSwap,
+    // BlockInsert,
+    // BlockRemove,
+    // Crossover,
