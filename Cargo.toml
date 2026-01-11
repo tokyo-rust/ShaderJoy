@@ -11,3 +11,22 @@ version = "0.1.0"
 edition = "2021"
 authors = ["ShaderJoy Contributors"]
 license = "MIT"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "rt-multi-thread"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1.0"
+naga = { version = "0.20", features = ["wgsl-in", "wgsl-out"] }
+genai = "0.5"
+cpal = "0.17"
+realfft = "3.3"
+ringbuf = "0.4"
+directories = "5.0"
+tracing = "0.1"
+wgpu = { version = "0.19", features = ["spirv"] }
+bytemuck = { version = "1.16", features = ["derive"] }
+iced = { version = "0.14", features = ["wgpu"] }
+tracing-subscriber = "0.3"

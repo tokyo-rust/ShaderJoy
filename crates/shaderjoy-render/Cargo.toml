@@ -6,10 +6,10 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-wgpu = { version = "0.19", features = ["spirv"] }
-bytemuck = { version = "1.16", features = ["derive"] }
-tokio = { version = "1", features = ["rt", "sync"] }
-tracing = "0.1"
+wgpu.workspace = true
+bytemuck.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio.workspace = true

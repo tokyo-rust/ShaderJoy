@@ -6,19 +6,19 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
-serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
-uuid = { version = "1.0", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "1.0"
-naga = { version = "0.20", features = ["wgsl-in", "wgsl-out"] }
-genai = "0.5"
-cpal = "0.17"
-realfft = "3.3"
-ringbuf = "0.4"
-directories = "5.0"
-tracing = "0.1"
+tokio.workspace = true
+serde.workspace = true
+toml.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+naga.workspace = true
+genai.workspace = true
+cpal.workspace = true
+realfft.workspace = true
+ringbuf.workspace = true
+directories.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
+tokio.workspace = true
