@@ -1,2 +1,6 @@
 [tools]
 "pipx:specify-cli" = "latest"
+
+[tasks.command-center]
+alias = "cc"
+run = "npx @command-center/command-center@latest"
