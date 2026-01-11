@@ -2,8 +2,6 @@
 
 ## Features to add
 
-* Use anyhow/eyre in binary portions of crate (thiserror still for crates/libraries that can have errors)
-* Use Tokio Tracing for tracing and logging
 * Add visual feedback for shader generation progress (including messages in an expandable/optional log area)
 * Ability to load a shader by name/uuid/path/etc in fullscreen mode just to vibe with it.
 * Ability to modify prompt as specimens are generated to help guide.
