@@ -5,7 +5,7 @@
 //! then the platform-specific config directory.
 
 use crate::error::ConfigError;
-use crate::llm::LlmProvider;
+use crate::generation::LlmProvider;
 use directories::ProjectDirs;
 use genai::adapter::AdapterKind;
 use serde::{Deserialize, Serialize};

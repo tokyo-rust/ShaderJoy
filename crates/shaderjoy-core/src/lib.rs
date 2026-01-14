@@ -8,7 +8,6 @@ pub mod audio;
 pub mod config;
 pub mod error;
 pub mod generation;
-pub mod llm;
 pub mod shaders;
 pub mod storage;
 

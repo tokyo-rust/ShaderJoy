@@ -132,8 +132,12 @@ fn helper() -> f32 {
         let result = validate_fragment_shader(MISSING_ENTRY_POINT);
         assert!(result.is_err());
         match result {
-            Err(ValidationError::MissingEntryPoint { entry_point }) => {
+            Err(ValidationError::MissingEntryPoint {
+                entry_point,
+                shader_source,
+            }) => {
                 assert_eq!(entry_point, "fragment");
+                assert!(!shader_source.is_empty());
             }
             _ => panic!("Expected MissingEntryPoint error"),
         }

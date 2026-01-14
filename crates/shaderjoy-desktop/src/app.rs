@@ -11,8 +11,10 @@ use uuid::Uuid;
 use crate::shader_widget::DEFAULT_FRAGMENT_SHADER;
 use crate::ui::grid::{GridMessage, ShaderGrid};
 use shaderjoy_core::config::AppConfig;
-use shaderjoy_core::generation::{generate_nonce_words, GenerationSession, Specimen};
-use shaderjoy_core::llm::{create_llm_client, LlmClient, ShaderGenerationRequest};
+use shaderjoy_core::generation::client::{LlmClient, ShaderGenerationRequest};
+use shaderjoy_core::generation::{
+    create_llm_client, generate_nonce_words, GenerationSession, Specimen,
+};
 
 #[derive(Debug, Clone)]
 pub enum Message {

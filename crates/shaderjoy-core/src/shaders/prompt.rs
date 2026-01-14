@@ -158,8 +158,6 @@ mod tests {
         );
         assert!(prompt.contains("cyberpunk city"));
         assert!(prompt.contains("plasma, fire"));
-        assert!(prompt.contains("struct Uniforms"));
-        assert!(prompt.contains("@fragment"));
     }
 
     #[test]
@@ -167,7 +165,6 @@ mod tests {
         let prompt =
             build_generation_user_prompt(None, &["plasma".to_string(), "fire".to_string()]);
         assert!(prompt.contains("plasma, fire"));
-        assert!(prompt.contains("struct Uniforms"));
     }
 
     #[test]

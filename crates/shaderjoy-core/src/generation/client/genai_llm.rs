@@ -9,9 +9,11 @@ use genai::chat::{ChatMessage, ChatOptions, ChatRequest};
 use genai::Client;
 use tracing::info;
 
-use super::client::{LlmClient, LlmResult, ShaderGenerationRequest, ShaderGenerationResponse};
-use super::LlmProvider;
 use crate::error::LlmError;
+use crate::generation::client::{
+    LlmClient, LlmResult, ShaderGenerationRequest, ShaderGenerationResponse,
+};
+use crate::generation::LlmProvider;
 use crate::shaders::prompt::{
     build_generation_user_prompt, build_mutation_prompt, extract_wgsl, WGSL_SYSTEM_PROMPT,
 };
@@ -35,6 +37,7 @@ impl GenaiLlmClient {
                 // TODO NOW consider making these configurable
                 // temperature: Some(0.9f64),
                 // top_p: Some(0.9f64),
+                max_tokens: Some(1000),
                 ..Default::default()
             })
             .build();

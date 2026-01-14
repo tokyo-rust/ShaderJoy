@@ -1,5 +1,7 @@
 //! LLM client trait definition.
 
+pub mod genai_llm;
+
 use async_trait::async_trait;
 
 use crate::error::LlmError;
