@@ -43,6 +43,7 @@ pub fn validate_wgsl(source: &str) -> Result<ValidationResult, ValidationError> 
         Ok(_) => Ok(ValidationResult::valid()),
         Err(validation_error) => Err(ValidationError::ValidationFailed {
             message: format!("{:?}", validation_error),
+            shader_source: source.to_string(),
         }),
     }
 }
@@ -63,6 +64,7 @@ pub fn validate_fragment_shader(source: &str) -> Result<ValidationResult, Valida
     if !has_fragment_entry {
         return Err(ValidationError::MissingEntryPoint {
             entry_point: "fragment".to_string(),
+            shader_source: source.to_string(),
         });
     }
 

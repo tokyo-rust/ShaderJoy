@@ -6,7 +6,6 @@
 
 ### Now
 
-* Looks like one cell is always erroring, why
 * Make a test LLM provider which just uses default shaders.
 * It looks like shaders states are rebuilt every frame when there is an error.  See if that is true when there is no error and fix both.
 * Settings dialog not implemented, see if this is in next phase.

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use genai::adapter::AdapterKind;
-use genai::chat::{ChatMessage, ChatRequest};
+use genai::chat::{ChatMessage, ChatOptions, ChatRequest};
 use genai::Client;
 use tracing::info;
 
@@ -30,7 +30,14 @@ impl GenaiLlmClient {
             env::set_var(env_var, api_key);
         }
 
-        let client = Client::default();
+        let client = Client::builder()
+            .with_chat_options(ChatOptions {
+                // TODO NOW consider making these configurable
+                // temperature: Some(0.9f64),
+                // top_p: Some(0.9f64),
+                ..Default::default()
+            })
+            .build();
         Ok(Self {
             client: Arc::new(client),
             provider,

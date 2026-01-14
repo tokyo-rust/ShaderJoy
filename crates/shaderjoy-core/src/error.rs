@@ -49,17 +49,23 @@ pub enum LlmError {
 
 #[derive(Error, Debug)]
 pub enum ValidationError {
-    #[error("WGSL parse error: {message}")]
+    #[error("WGSL parse error: {message}\nSource: {shader_source}")]
     ParseError {
         message: String,
         shader_source: String,
     },
 
-    #[error("WGSL validation error: {message}")]
-    ValidationFailed { message: String },
+    #[error("WGSL validation error: {message}\nSource: {shader_source}")]
+    ValidationFailed {
+        message: String,
+        shader_source: String,
+    },
 
-    #[error("Missing required entry point: {entry_point}")]
-    MissingEntryPoint { entry_point: String },
+    #[error("Missing required entry point: {entry_point}\nSource: {shader_source}")]
+    MissingEntryPoint {
+        entry_point: String,
+        shader_source: String,
+    },
 }
 
 #[derive(Error, Debug)]

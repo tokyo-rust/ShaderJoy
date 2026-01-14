@@ -31,6 +31,13 @@ struct Uniforms {
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 ```
 
+Strictly adhere to WGSL standards. Remember that function arguments are
+immutable. If you need to modify an argument within a function, you must declare
+a new mutable variable using var
+
+Also remember that variables declared with `let` are immutable. If you need to
+modify a variable, you must declare a new mutable variable using `var`.
+
 OPTIONALLY ACCESS THE SPECTRUM IN YOUR SHADER:
 - The full 64-element spectrum is in uniforms.audio.spectrum as 16 vec4s
 - To get individual frequency bins, use: uniforms.audio.spectrum[i/4][i%4] for bin i
