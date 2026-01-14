@@ -15,6 +15,7 @@ use crate::error::LlmError;
 use crate::shaders::prompt::{
     build_generation_user_prompt, build_mutation_prompt, extract_wgsl, WGSL_SYSTEM_PROMPT,
 };
+use crate::shaders::validation::validate_wgsl;
 
 pub struct GenaiLlmClient {
     client: Arc<Client>,
@@ -110,6 +111,8 @@ impl LlmClient for GenaiLlmClient {
         let wgsl_code = extract_wgsl(response_text).ok_or_else(|| LlmError::InvalidResponse {
             message: "Could not extract WGSL code from response".to_string(),
         })?;
+
+        validate_wgsl(&wgsl_code)?;
 
         info!(
             "Got Wgsl code:\n\t{}...",

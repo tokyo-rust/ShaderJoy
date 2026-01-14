@@ -146,7 +146,7 @@ impl ShaderJoyApp {
                 wgsl_code,
                 nonce_words,
             } => {
-                let specimen_id = self.add_specimen(index, wgsl_code, nonce_words);
+                let specimen_id = self.add_specimen(index, wgsl_code, &nonce_words);
                 self.grid.set_specimen(index, specimen_id);
 
                 let filled = self.grid.filled_count();

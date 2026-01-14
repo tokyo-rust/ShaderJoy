@@ -10,9 +10,6 @@ pub enum Error {
     #[error("LLM error: {0}")]
     Llm(#[from] LlmError),
 
-    #[error("Shader validation error: {0}")]
-    Validation(#[from] ValidationError),
-
     #[error("Storage error: {0}")]
     Storage(#[from] StorageError),
 
@@ -45,6 +42,9 @@ pub enum LlmError {
 
     #[error("Model not available: {model}")]
     ModelNotAvailable { model: String },
+
+    #[error("Generateed WGSL code could not be validated: {0}")]
+    InvalidWgslCode(#[from] ValidationError),
 }
 
 #[derive(Error, Debug)]

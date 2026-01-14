@@ -24,7 +24,7 @@ pub struct AudioUniforms {
     pub mid: f32,
     /// High frequency energy (hi-hats, sibilance).
     pub treble: f32,
-    /// 64-bin FFT spectrum stored as 16 vec4<f32> for proper std140 alignment.
+    /// 64-bin FFT spectrum stored as 16 `vec4<f32>` for proper std140 alignment.
     pub spectrum: [[f32; 4]; 16],
 }
 
@@ -70,7 +70,7 @@ mod tests {
         uniforms.bass = 0.3;
         uniforms.mid = 0.6;
         uniforms.treble = 0.9;
-        
+
         let energy = uniforms.energy();
         assert!((energy - 0.6).abs() < 0.001);
     }
