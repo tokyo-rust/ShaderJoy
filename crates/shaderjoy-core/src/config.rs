@@ -36,6 +36,9 @@ pub struct AppConfig {
     pub storage: StorageConfig,
     #[serde(default)]
     pub audio: AudioConfig,
+    /// Set to true to use test mode (no external api calls, mocks only)
+    #[serde(default)]
+    pub test: bool,
 }
 
 /// Dimensions of the shader preview grid in the UI.
@@ -151,6 +154,7 @@ impl Default for AppConfig {
             generation: GenerationConfig::default(),
             storage: StorageConfig::default(),
             audio: AudioConfig::default(),
+            test: false,
         }
     }
 }
@@ -182,6 +186,7 @@ impl AppConfig {
             if path.exists() {
                 match Self::load_from_file(&path) {
                     Ok(cfg) => return Ok((cfg, false)),
+
                     Err(e) => return Err(e),
                 }
             }

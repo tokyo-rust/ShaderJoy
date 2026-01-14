@@ -37,7 +37,7 @@ impl GenaiLlmClient {
                 // TODO NOW consider making these configurable
                 // temperature: Some(0.9f64),
                 // top_p: Some(0.9f64),
-                max_tokens: Some(1000),
+                max_tokens: Some(2000),
                 ..Default::default()
             })
             .build();

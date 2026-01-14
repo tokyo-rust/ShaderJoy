@@ -17,8 +17,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    config::AppConfig,
     error::LlmError,
-    generation::client::{genai_llm::GenaiLlmClient, LlmClient},
+    generation::client::{genai_llm::GenaiLlmClient, test_client::TestClient, LlmClient},
 };
 
 /// Generate random nonce words from the English dictionary.
@@ -178,7 +179,13 @@ impl LlmProvider {
     }
 }
 
-pub fn create_llm_client(provider: &LlmProvider) -> Result<Arc<dyn LlmClient>, LlmError> {
+pub fn create_llm_client(
+    provider: &LlmProvider,
+    config: &AppConfig,
+) -> Result<Arc<dyn LlmClient>, LlmError> {
+    if config.test {
+        return Ok(Arc::new(TestClient::new()) as Arc<dyn LlmClient>);
+    }
     let client = GenaiLlmClient::new(provider.clone())?;
     Ok(Arc::new(client) as Arc<dyn LlmClient>)
 }
@@ -213,7 +220,7 @@ mod tests {
     #[test]
     fn test_create_llm_client() {
         let provider = LlmProvider::new(AdapterKind::Ollama, "gemma:2b");
-        let result = create_llm_client(&provider);
+        let result = create_llm_client(&provider, &AppConfig::default());
         assert!(result.is_ok());
     }
 

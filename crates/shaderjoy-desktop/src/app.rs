@@ -6,9 +6,9 @@ use std::time::Instant;
 use iced::widget::{button, column, container, row, text, text_input};
 use iced::window;
 use iced::{Element, Length, Subscription, Task, Theme};
+use shaderjoy_core::shaders::DEFAULT_FRAGMENT_SHADER;
 use uuid::Uuid;
 
-use crate::shader_widget::DEFAULT_FRAGMENT_SHADER;
 use crate::ui::grid::{GridMessage, ShaderGrid};
 use shaderjoy_core::config::AppConfig;
 use shaderjoy_core::generation::client::{LlmClient, ShaderGenerationRequest};
@@ -57,7 +57,7 @@ impl ShaderJoyApp {
         let grid_size = config.grid_size;
         let grid = ShaderGrid::new(grid_size.rows, grid_size.cols);
 
-        let llm_client = create_llm_client(&config.llm_provider).ok();
+        let llm_client = create_llm_client(&config.llm_provider, &config).ok();
 
         let app = Self {
             config,

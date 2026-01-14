@@ -1,6 +1,8 @@
 //! LLM client trait definition.
 
 pub mod genai_llm;
+#[cfg(any(debug_assertions, test, feature = "test_client"))]
+pub mod test_client;
 
 use async_trait::async_trait;
 

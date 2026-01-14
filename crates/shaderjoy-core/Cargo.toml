@@ -27,3 +27,7 @@ async-trait = "0.1.89"
 
 [dev-dependencies]
 tokio.workspace = true
+
+[features]
+default = ["test_client"]
+test_client = []
