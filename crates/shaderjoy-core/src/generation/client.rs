@@ -5,6 +5,7 @@ pub mod genai_llm;
 pub mod test_client;
 
 use async_trait::async_trait;
+use uuid::Uuid;
 
 use crate::error::LlmError;
 
@@ -26,6 +27,8 @@ pub type LlmResult<T> = Result<T, LlmError>;
 
 #[derive(Debug, Clone)]
 pub struct ShaderGenerationRequest {
+    /// Unique identifier for this request, used for logging and tracing
+    pub request_id: Uuid,
     /// Optional user-provided prompt to steer generation direction
     pub user_prompt: Option<String>,
     /// Random words that act as nonces to randomize LLM output
@@ -37,6 +40,7 @@ pub struct ShaderGenerationRequest {
 impl ShaderGenerationRequest {
     pub fn new(user_prompt: Option<String>, nonce_words: Vec<String>) -> Self {
         Self {
+            request_id: Uuid::new_v4(),
             user_prompt,
             nonce_words,
             parent_code: None,

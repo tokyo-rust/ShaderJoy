@@ -13,6 +13,7 @@ use iced::widget::shader::{self as iced_shader, Viewport};
 use iced::Rectangle;
 use shaderjoy_core::shaders::{DEFAULT_FRAGMENT_SHADER, VERTEX_SHADER};
 use tracing::error;
+use uuid::Uuid;
 
 use shaderjoy_core::shaders::uniforms::ShaderUniforms;
 
@@ -31,9 +32,9 @@ pub struct ShaderData {
 }
 
 impl ShaderData {
-    pub fn new(wgsl_code: String) -> Self {
+    pub fn new(wgsl_code: String, shader_code_id: Uuid) -> Self {
         Self {
-            shader_data_inner: Arc::new(ShaderDataInner::new(wgsl_code)),
+            shader_data_inner: Arc::new(ShaderDataInner::new(wgsl_code, shader_code_id)),
         }
     }
 
@@ -68,25 +69,17 @@ struct ShaderDataInner {
     uniforms: ShaderUniforms,
     is_selected: bool,
     compilation_error: Option<String>,
-    shader_code_hash: u64,
+    shader_code_id: Uuid,
 }
 
 impl ShaderDataInner {
-    pub fn new(wgsl_code: String) -> Self {
-        let shader_code_hash = {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            wgsl_code.hash(&mut hasher);
-            hasher.finish()
-        };
-
+    pub fn new(wgsl_code: String, shader_code_id: Uuid) -> Self {
         Self {
             wgsl_code,
             uniforms: ShaderUniforms::default(),
             is_selected: false,
             compilation_error: None,
-            shader_code_hash,
+            shader_code_id,
         }
     }
 }
@@ -118,7 +111,7 @@ impl iced_shader::Primitive for ShaderCellPrimitive {
         if !self.shader_data.wgsl_code.is_empty() {
             if let Err(e) = pipeline.compile_shader_for_cache(
                 &self.shader_data.wgsl_code,
-                self.shader_data.shader_code_hash,
+                self.shader_data.shader_code_id,
             ) {
                 error!(error = %e, "Failed to compile shader");
             }
@@ -139,7 +132,7 @@ impl iced_shader::Primitive for ShaderCellPrimitive {
         target: &wgpu::TextureView,
         clip_bounds: &Rectangle<u32>,
     ) {
-        let cell_pipeline = pipeline.get_pipeline_for_hash(self.shader_data.shader_code_hash);
+        let cell_pipeline = pipeline.get_pipeline_for_id(self.shader_data.shader_code_id);
 
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ShaderCell render pass"),
@@ -183,8 +176,8 @@ pub struct ShaderCellPipeline {
     bind_group_layout: wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
     device: Arc<wgpu::Device>,
-    // Cache pipelines per shader code hash (wrapped in Arc to share without cloning)
-    pipeline_cache: Arc<Mutex<HashMap<u64, Arc<wgpu::RenderPipeline>>>>,
+    // Cache pipelines per shader code id (wrapped in Arc to share without cloning)
+    pipeline_cache: Arc<Mutex<HashMap<Uuid, Arc<wgpu::RenderPipeline>>>>,
     // Default pipeline for initial/fallback rendering
     default_pipeline: Arc<wgpu::RenderPipeline>,
 }
@@ -228,13 +221,13 @@ impl ShaderCellPipeline {
         })
     }
 
-    fn compile_shader_for_cache(&self, wgsl_code: &str, hash: u64) -> Result<(), String> {
+    fn compile_shader_for_cache(&self, wgsl_code: &str, shader_code_id: Uuid) -> Result<(), String> {
         let combined_shader = format!("{}\n{}", VERTEX_SHADER, wgsl_code);
 
         let mut cache = self.pipeline_cache.lock().unwrap();
 
         // Already cached by another cell?
-        if cache.contains_key(&hash) {
+        if cache.contains_key(&shader_code_id) {
             return Ok(());
         }
 
@@ -247,7 +240,7 @@ impl ShaderCellPipeline {
             )
         })) {
             Ok(pipeline) => {
-                cache.insert(hash, Arc::new(pipeline));
+                cache.insert(shader_code_id, Arc::new(pipeline));
                 Ok(())
             }
             Err(_) => {
@@ -257,12 +250,11 @@ impl ShaderCellPipeline {
         }
     }
 
-    // TODO NOW replace hashing with just an id for the shader map.
-    fn get_pipeline_for_hash(&self, hash: u64) -> Arc<wgpu::RenderPipeline> {
+    fn get_pipeline_for_id(&self, shader_code_id: Uuid) -> Arc<wgpu::RenderPipeline> {
         self.pipeline_cache
             .lock()
             .unwrap()
-            .get(&hash)
+            .get(&shader_code_id)
             .cloned()
             .unwrap_or_else(|| Arc::clone(&self.default_pipeline))
     }

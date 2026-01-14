@@ -76,6 +76,7 @@ impl LlmClient for GenaiLlmClient {
         request: ShaderGenerationRequest,
     ) -> LlmResult<ShaderGenerationResponse> {
         info!(
+            request_id = %request.request_id,
             provider = self.provider_name(),
             model = self.model_name(),
             is_mutation = request.is_mutation(),
@@ -101,8 +102,9 @@ impl LlmClient for GenaiLlmClient {
         ]);
 
         let model = self.model_name_for_genai();
+        let request_id = request.request_id;
 
-        info!(model = %model, "Sending chat request to LLM provider");
+        info!(request_id = %request_id, model = %model, "Sending chat request to LLM provider");
         let chat_response = self
             .client
             .exec_chat(&model, chat_req, None)
@@ -127,13 +129,13 @@ impl LlmClient for GenaiLlmClient {
         validate_wgsl(&wgsl_code)?;
 
         info!(
+            request_id = %request_id,
             "Got Wgsl code:\n\t{}...",
             wgsl_code.chars().take(1000).collect::<String>()
         );
 
         let tokens_used = chat_response.usage.total_tokens.map(|t| t as u32);
-        // TODO NOW in these logs do it with request id (uuid)
-        info!(tokens_used = ?tokens_used, "Tokens used in response");
+        info!(request_id = %request_id, tokens_used = ?tokens_used, "Tokens used in response");
 
         Ok(ShaderGenerationResponse {
             wgsl_code,

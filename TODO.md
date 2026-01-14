@@ -6,15 +6,14 @@
 
 ### Now
 
-* It looks like shaders states are rebuilt every frame when there is an error.  See if that is true when there is no error and fix both.
-* Settings dialog not implemented, see if this is in next phase.
-* Save dialog not implemented correctly, it should save the entire shader Specimen lineage, check if this is in next phase.
 * TODO NOW pass
 * Make shader treat the box it is in as the whole "screen"
-* Mouse not taken into account
+* Mouse/Uniforms not sent
 * Error handling and over requesting.
 * use default shader and clean stuff up.
 * Is audio being actually passed yet? Check tasks if it is next before trying to fix.
+* Settings dialog not implemented, see if this is in next phase.
+* Save dialog not implemented correctly, it should save the entire shader Specimen lineage, check if this is in next phase.
 
 ### Features
 

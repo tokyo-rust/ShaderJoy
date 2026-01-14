@@ -1,5 +1,9 @@
 //! Grid UI component for shader display.
 
+use std::cell::RefCell;
+
+use tracing::debug;
+
 use iced::widget::{button, column, container, row};
 use iced::{Element, Length};
 use uuid::Uuid;
@@ -7,6 +11,13 @@ use uuid::Uuid;
 use crate::shader_widget::{shader_widget, ShaderData};
 use shaderjoy_core::generation::GenerationSession;
 use shaderjoy_core::shaders::uniforms::ShaderUniforms;
+
+/// Cached ShaderData with the specimen ID it was built from.
+#[derive(Clone)]
+struct CachedShaderData {
+    specimen_id: Uuid,
+    data: ShaderData,
+}
 
 #[derive(Debug, Clone)]
 pub enum GridMessage {
@@ -20,6 +31,9 @@ pub struct ShaderGrid {
     pub cell_specimens: Vec<Option<Uuid>>,
     pub shader_errors: Vec<Option<String>>,
     pub uniforms: ShaderUniforms,
+    /// Cached ShaderData per cell - avoids recreating every frame.
+    /// Uses RefCell for interior mutability in view().
+    shader_data_cache: RefCell<Vec<Option<CachedShaderData>>>,
 }
 
 impl ShaderGrid {
@@ -31,6 +45,7 @@ impl ShaderGrid {
             cell_specimens: vec![None; cell_count],
             shader_errors: vec![None; cell_count],
             uniforms: ShaderUniforms::default(),
+            shader_data_cache: RefCell::new(vec![None; cell_count]),
         }
     }
 
@@ -59,6 +74,9 @@ impl ShaderGrid {
         for error in &mut self.shader_errors {
             *error = None;
         }
+        for cached in self.shader_data_cache.borrow_mut().iter_mut() {
+            *cached = None;
+        }
     }
 
     pub fn update_uniforms(&mut self, uniforms: ShaderUniforms) {
@@ -72,6 +90,45 @@ impl ShaderGrid {
     /// Gets the specimen UUID at a given cell index
     pub fn specimen_at(&self, index: usize) -> Option<Uuid> {
         self.cell_specimens.get(index).and_then(|s| *s)
+    }
+
+    /// Returns cached ShaderData if specimen ID matches, otherwise creates and caches new one.
+    fn get_or_create_shader_data(
+        &self,
+        index: usize,
+        specimen: &shaderjoy_core::generation::Specimen,
+        is_selected: bool,
+        compilation_error: Option<String>,
+    ) -> ShaderData {
+        let mut cache = self.shader_data_cache.borrow_mut();
+
+        let needs_rebuild = match cache.get(index) {
+            Some(Some(cached)) => cached.specimen_id != specimen.id,
+            _ => true,
+        };
+
+        if needs_rebuild {
+            debug!(
+                cell_index = index,
+                specimen_id = %specimen.id,
+                code_len = specimen.wgsl_code.len(),
+                "ShaderData cache miss - rebuilding"
+            );
+            let data = ShaderData::new(specimen.wgsl_code.clone(), specimen.id);
+            cache[index] = Some(CachedShaderData {
+                specimen_id: specimen.id,
+                data: data.clone(),
+            });
+        }
+
+        cache[index]
+            .as_ref()
+            .expect("cache entry just created")
+            .data
+            .clone()
+            .with_uniforms(self.uniforms)
+            .with_selected(is_selected)
+            .with_compilation_error(compilation_error)
     }
 
     pub fn view<'a, Message>(&'a self, session: &'a GenerationSession) -> Element<'a, Message>
@@ -121,10 +178,7 @@ impl ShaderGrid {
         let error = self.shader_errors.get(index).and_then(|e| e.as_ref());
 
         let content: Element<'a, Message> = if let Some((_, specimen)) = specimen {
-            let data = ShaderData::new(specimen.wgsl_code.clone())
-                .with_uniforms(self.uniforms)
-                .with_selected(is_selected)
-                .with_compilation_error(error.cloned());
+            let data = self.get_or_create_shader_data(index, specimen, is_selected, error.cloned());
 
             shader_widget(data)
                 .width(Length::Fill)
