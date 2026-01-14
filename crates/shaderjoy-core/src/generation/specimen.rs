@@ -1,7 +1,5 @@
 //! Specimen (individual shader) definition.
 
-use std::sync::Arc;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -31,15 +29,24 @@ impl SpecimenStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MutationType {
-    PromptWords(Vec<String>),
+    /// Changed the random nonce words used to vary LLM output
+    NonceWords(Vec<String>),
+    /// Changed the user-provided steering prompt
+    UserPrompt(Option<String>),
 }
 
 impl std::fmt::Display for MutationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
-            MutationType::PromptWords(words) => format!("Prompt word change: {:?}", words),
-        };
-        write!(f, "{}", name)
+        match self {
+            MutationType::NonceWords(words) => write!(f, "Nonce word change: {:?}", words),
+            MutationType::UserPrompt(prompt) => {
+                write!(
+                    f,
+                    "User prompt change: {:?}",
+                    prompt.as_deref().unwrap_or("(none)")
+                )
+            }
+        }
     }
 }
 
@@ -47,24 +54,31 @@ impl std::fmt::Display for MutationType {
 pub struct Specimen {
     pub id: Uuid,
     pub wgsl_code: String,
-    pub prompt_words: Vec<String>,
+    /// Optional user-provided prompt to steer the generation direction
+    pub user_prompt: Option<String>,
+    /// Random words that act as nonces to randomize LLM output.  These act as a
+    /// kind of "salt" or latent space for the LLM to explore.
+    pub nonce_words: Vec<String>,
     pub generation: u32,
     pub parent_id: Option<Uuid>,
-    pub parent: Option<Arc<Specimen>>,
     pub mutation_type: Option<MutationType>,
     pub created_at: DateTime<Utc>,
     pub status: SpecimenStatus,
 }
 
 impl Specimen {
-    pub fn new_generating(prompt_words: Vec<String>, generation: u32) -> Self {
+    pub fn new_generating(
+        user_prompt: Option<String>,
+        nonce_words: Vec<String>,
+        generation: u32,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             wgsl_code: String::new(),
-            prompt_words,
+            user_prompt,
+            nonce_words,
             generation,
             parent_id: None,
-            parent: None,
             mutation_type: None,
             created_at: Utc::now(),
             status: SpecimenStatus::Generating,
@@ -72,21 +86,21 @@ impl Specimen {
     }
 
     pub fn new_mutation(
-        parent: &Arc<Specimen>,
+        parent: &Specimen,
         mutation_type: MutationType,
         generation: u32,
     ) -> Self {
-        let prompt_words = match &mutation_type {
-            MutationType::PromptWords(pw) => pw.clone(),
-            // _ => parent.prompt_words.clone(),
+        let (user_prompt, nonce_words) = match &mutation_type {
+            MutationType::NonceWords(words) => (parent.user_prompt.clone(), words.clone()),
+            MutationType::UserPrompt(prompt) => (prompt.clone(), parent.nonce_words.clone()),
         };
         Self {
             id: Uuid::new_v4(),
             wgsl_code: String::new(),
-            prompt_words: prompt_words,
+            user_prompt,
+            nonce_words,
             generation,
             parent_id: Some(parent.id),
-            parent: Some(parent.clone()),
             mutation_type: Some(mutation_type),
             created_at: Utc::now(),
             status: SpecimenStatus::Generating,
@@ -125,40 +139,65 @@ impl Specimen {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
 
     #[test]
     fn test_specimen_new_generating() {
-        let specimen = Specimen::new_generating(vec!["plasma".to_string()], 0);
+        let specimen =
+            Specimen::new_generating(Some("cyberpunk".to_string()), vec!["plasma".to_string()], 0);
         assert_eq!(specimen.status, SpecimenStatus::Generating);
         assert_eq!(specimen.generation, 0);
+        assert_eq!(specimen.user_prompt, Some("cyberpunk".to_string()));
+        assert_eq!(specimen.nonce_words, vec!["plasma".to_string()]);
         assert!(specimen.parent_id.is_none());
         assert!(specimen.mutation_type.is_none());
     }
 
     #[test]
-    fn test_specimen_mutation() {
-        let parent = Arc::new(Specimen::new_generating(vec!["fire".to_string()], 0));
+    fn test_specimen_new_generating_no_user_prompt() {
+        let specimen =
+            Specimen::new_generating(None, vec!["fire".to_string(), "wave".to_string()], 0);
+        assert!(specimen.user_prompt.is_none());
+        assert_eq!(specimen.nonce_words.len(), 2);
+    }
+
+    #[test]
+    fn test_specimen_mutation_nonce_words() {
+        let parent = Specimen::new_generating(
+            Some("retro".to_string()),
+            vec!["fire".to_string()],
+            0,
+        );
+        let new_nonces = vec!["ice".to_string(), "glow".to_string()];
+        let child =
+            Specimen::new_mutation(&parent, MutationType::NonceWords(new_nonces.clone()), 1);
+
+        assert_eq!(child.parent_id, Some(parent.id));
+        assert_eq!(child.user_prompt, parent.user_prompt);
+        assert_eq!(child.nonce_words, new_nonces);
+        assert_eq!(child.generation, 1);
+    }
+
+    #[test]
+    fn test_specimen_mutation_user_prompt() {
+        let parent = Specimen::new_generating(
+            Some("retro".to_string()),
+            vec!["fire".to_string()],
+            0,
+        );
         let child = Specimen::new_mutation(
             &parent,
-            MutationType::PromptWords(parent.prompt_words.clone()),
+            MutationType::UserPrompt(Some("neon".to_string())),
             1,
         );
 
-        assert_eq!(child.parent_id, Some(parent.id));
-        assert_eq!(
-            child.mutation_type,
-            Some(MutationType::PromptWords(parent.prompt_words.clone()))
-        );
-        assert_eq!(child.generation, 1);
-        assert_eq!(child.prompt_words, parent.prompt_words);
+        assert_eq!(child.user_prompt, Some("neon".to_string()));
+        assert_eq!(child.nonce_words, parent.nonce_words);
     }
 
     #[test]
     fn test_specimen_status_transitions() {
-        let mut specimen = Specimen::new_generating(vec![], 0);
+        let mut specimen = Specimen::new_generating(None, vec![], 0);
         assert!(!specimen.status.is_renderable());
 
         specimen.set_code("// wgsl code".to_string());

@@ -7,7 +7,7 @@ use crate::audio::AudioUniforms;
 /// Matches the WGSL `Uniforms` struct layout. Uses `#[repr(C)]` for
 /// predictable memory layout when uploading to GPU.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ShaderUniforms {
     /// Elapsed time in seconds since shader started.
     pub time: f32,
@@ -18,18 +18,6 @@ pub struct ShaderUniforms {
     /// Mouse state: `[x, y, click_x, click_y]` in pixels from bottom-left.
     pub mouse: [f32; 4],
     pub audio: AudioUniforms,
-}
-
-impl Default for ShaderUniforms {
-    fn default() -> Self {
-        Self {
-            time: 0.0,
-            frame: 0,
-            resolution: [800.0, 600.0],
-            mouse: [0.0, 0.0, 0.0, 0.0],
-            audio: AudioUniforms::default(),
-        }
-    }
 }
 
 impl ShaderUniforms {
@@ -90,7 +78,7 @@ mod tests {
         uniforms.update_time(1.5);
         assert_eq!(uniforms.time, 1.5);
         assert_eq!(uniforms.frame, 1);
-        
+
         uniforms.update_time(2.0);
         assert_eq!(uniforms.frame, 2);
     }

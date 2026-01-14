@@ -9,8 +9,12 @@ pub mod fft;
 /// - bass: ~20–250 Hz
 /// - mid: ~250–4000 Hz  
 /// - treble: ~4000–20000 Hz
+///
+/// Note: The spectrum array is stored as `array<vec4<f32>>` (16 bytes per element)
+/// to satisfy std140 layout requirements for uniform buffers in WGSL.
+/// This stores 16 vec4s = 64 f32 values total.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct AudioUniforms {
     /// Overall signal amplitude (RMS of recent samples).
     pub amplitude: f32,
@@ -20,8 +24,8 @@ pub struct AudioUniforms {
     pub mid: f32,
     /// High frequency energy (hi-hats, sibilance).
     pub treble: f32,
-    /// 64-bin FFT spectrum, logarithmically scaled.
-    pub spectrum: [f32; 64],
+    /// 64-bin FFT spectrum stored as 16 vec4<f32> for proper std140 alignment.
+    pub spectrum: [[f32; 4]; 16],
 }
 
 impl Default for AudioUniforms {
@@ -31,7 +35,7 @@ impl Default for AudioUniforms {
             bass: 0.0,
             mid: 0.0,
             treble: 0.0,
-            spectrum: [0.0; 64],
+            spectrum: [[0.0; 4]; 16],
         }
     }
 }
@@ -57,7 +61,7 @@ mod tests {
         let uniforms = AudioUniforms::default();
         assert_eq!(uniforms.amplitude, 0.0);
         assert_eq!(uniforms.bass, 0.0);
-        assert_eq!(uniforms.spectrum.len(), 64);
+        assert_eq!(uniforms.spectrum.len(), 16); // 16 vec4s = 64 f32 values
     }
 
     #[test]

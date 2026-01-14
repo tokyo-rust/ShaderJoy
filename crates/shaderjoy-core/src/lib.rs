@@ -9,7 +9,7 @@ pub mod config;
 pub mod error;
 pub mod generation;
 pub mod llm;
-pub mod shader;
+pub mod shaders;
 pub mod storage;
 
 /// Returns a human-readable description of configuration search paths.

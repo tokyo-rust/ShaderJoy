@@ -64,28 +64,28 @@
 
 ### Implementation for User Story 1
 
-- [ ] T024 [US1] Define LlmClient trait in crates/shaderjoy-core/src/llm/client.rs (async generate_shader, streaming support)
-- [ ] T025 [US1] Define LlmError enum in crates/shaderjoy-core/src/llm/client.rs
-- [ ] T026 [US1] Implement RemoteLlmClient for OpenAI/Anthropic/Google using genai crate in crates/shaderjoy-core/src/llm/remote.rs
-- [ ] T027 [US1] Implement OllamaClient using genai crate in crates/shaderjoy-core/src/llm/ollama.rs
-- [ ] T028 [US1] Implement create_llm_client factory function in crates/shaderjoy-core/src/llm/mod.rs
-- [ ] T029 [US1] Build shader generation prompt template in crates/shaderjoy-core/src/shader/prompt.rs (word-to-shader prompting)
-- [ ] T030 [US1] Build mutation prompt template in crates/shaderjoy-core/src/shader/prompt.rs (parent code + word variance)
-- [ ] T031 [US1] Implement WGSL extraction from LLM response in crates/shaderjoy-core/src/shader/prompt.rs
-- [ ] T032 [US1] Implement lineage/evolution tracking in crates/shaderjoy-core/src/generation/lineage.rs
-- [ ] T033 [US1] Define ShaderPipeline struct in crates/shaderjoy-render/src/pipeline.rs (wgpu render pipeline)
-- [ ] T034 [US1] Implement Pipeline::new() for compiling WGSL to wgpu in crates/shaderjoy-render/src/pipeline.rs
-- [ ] T035 [US1] Implement uniform buffer management in crates/shaderjoy-render/src/uniforms.rs (ShaderUniforms → GPU)
-- [ ] T036 [US1] Implement grid layout calculation in crates/shaderjoy-render/src/grid.rs (cell positioning, viewport)
-- [ ] T037 [US1] Create ShaderProgram implementing iced::widget::shader::Program trait in crates/shaderjoy-desktop/src/shader_widget.rs
-- [ ] T038 [US1] Create ShaderPrimitive implementing iced::widget::shader::Primitive trait in crates/shaderjoy-desktop/src/shader_widget.rs
-- [ ] T039 [US1] Implement grid UI component in crates/shaderjoy-desktop/src/ui/grid.rs (selectable cells, display shaders)
-- [ ] T040 [US1] Create main Iced Application struct in crates/shaderjoy-desktop/src/app.rs (AppState, Message enum)
-- [ ] T041 [US1] Implement prompt input field and generate button in crates/shaderjoy-desktop/src/app.rs
-- [ ] T042 [US1] Implement shader selection handler (click cell to set parent) in crates/shaderjoy-desktop/src/app.rs
-- [ ] T043 [US1] Wire generation output to grid cells in crates/shaderjoy-desktop/src/app.rs
-- [ ] T044 [US1] Create main.rs entry point in crates/shaderjoy-desktop/src/main.rs
-- [ ] T045 [US1] Implement 60 FPS animation subscription via window::frames() in crates/shaderjoy-desktop/src/app.rs
+- [x] T024 [US1] Define LlmClient trait in crates/shaderjoy-core/src/llm/client.rs (async generate_shader, streaming support)
+- [x] T025 [US1] Define LlmError enum in crates/shaderjoy-core/src/llm/client.rs
+- [x] T026 [US1] Implement RemoteLlmClient for OpenAI/Anthropic/Google using genai crate in crates/shaderjoy-core/src/llm/remote.rs
+- [x] T027 [US1] Implement OllamaClient using genai crate in crates/shaderjoy-core/src/llm/ollama.rs
+- [x] T028 [US1] Implement create_llm_client factory function in crates/shaderjoy-core/src/llm/mod.rs
+- [x] T029 [US1] Build shader generation prompt template in crates/shaderjoy-core/src/shader/prompt.rs (word-to-shader prompting)
+- [x] T030 [US1] Build mutation prompt template in crates/shaderjoy-core/src/shader/prompt.rs (parent code + word variance)
+- [x] T031 [US1] Implement WGSL extraction from LLM response in crates/shaderjoy-core/src/shader/prompt.rs
+- [x] T032 [US1] Implement lineage/evolution tracking in crates/shaderjoy-core/src/generation/lineage.rs
+- [x] T033 [US1] Define ShaderPipeline struct in crates/shaderjoy-render/src/pipeline.rs (wgpu render pipeline)
+- [x] T034 [US1] Implement Pipeline::new() for compiling WGSL to wgpu in crates/shaderjoy-render/src/pipeline.rs
+- [x] T035 [US1] Implement uniform buffer management in crates/shaderjoy-render/src/uniforms.rs (ShaderUniforms → GPU)
+- [x] T036 [US1] Implement grid layout calculation in crates/shaderjoy-render/src/grid.rs (cell positioning, viewport)
+- [x] T037 [US1] Create ShaderProgram implementing iced::widget::shader::Program trait in crates/shaderjoy-desktop/src/shader_widget.rs
+- [x] T038 [US1] Create ShaderPrimitive implementing iced::widget::shader::Primitive trait in crates/shaderjoy-desktop/src/shader_widget.rs
+- [x] T039 [US1] Implement grid UI component in crates/shaderjoy-desktop/src/ui/grid.rs (selectable cells, display shaders)
+- [x] T040 [US1] Create main Iced Application struct in crates/shaderjoy-desktop/src/app.rs (AppState, Message enum)
+- [x] T041 [US1] Implement prompt input field and generate button in crates/shaderjoy-desktop/src/app.rs
+- [x] T042 [US1] Implement shader selection handler (click cell to set parent) in crates/shaderjoy-desktop/src/app.rs
+- [x] T043 [US1] Wire generation output to grid cells in crates/shaderjoy-desktop/src/app.rs
+- [x] T044 [US1] Create main.rs entry point in crates/shaderjoy-desktop/src/main.rs
+- [x] T045 [US1] Implement 60 FPS animation subscription via window::frames() in crates/shaderjoy-desktop/src/app.rs
 
 **Checkpoint**: User Story 1 complete - can generate and evolve shaders from prompts
 

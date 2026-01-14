@@ -1,7 +1,9 @@
-//! ShaderJoy Desktop Application Library
+//! ShaderJoy Desktop Library
 //!
-//! Cross-platform desktop UI using Iced framework.
+//! Iced-based desktop application for shader evolution.
 
 pub mod app;
 pub mod shader_widget;
 pub mod ui;
+
+pub use app::{Message, ShaderJoyApp};

@@ -5,8 +5,9 @@
 //! then the platform-specific config directory.
 
 use crate::error::ConfigError;
-use crate::llm::{AdapterKind, LlmProvider};
+use crate::llm::LlmProvider;
 use directories::ProjectDirs;
+use genai::adapter::AdapterKind;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -38,7 +39,7 @@ pub struct AppConfig {
 }
 
 /// Dimensions of the shader preview grid in the UI.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct GridSize {
     pub rows: u32,
     pub cols: u32,
@@ -60,6 +61,8 @@ impl GridSize {
 /// Controls for LLM shader generation requests.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerationConfig {
+    /// Number of words to generate as a nonce for LLM latent space variance.
+    pub nonce_word_count: u32,
     /// Maximum number of concurrent LLM requests.
     pub concurrency: u32,
     /// Maximum retry attempts per failed request.
@@ -75,6 +78,7 @@ pub struct GenerationConfig {
 impl Default for GenerationConfig {
     fn default() -> Self {
         Self {
+            nonce_word_count: 10,
             // 12 concurrent requests balances throughput with typical LLM API rate limits.
             // Most providers allow 10-60 RPM; 12 provides good parallelism for a 3x3 grid
             // while leaving headroom for retries.

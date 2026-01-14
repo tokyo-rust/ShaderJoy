@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "crates/shaderjoy-core",
-    "crates/shaderjoy-render",
     "crates/shaderjoy-desktop",
 ]
 resolver = "2"
@@ -13,7 +12,13 @@ authors = ["ShaderJoy Contributors"]
 license = "MIT"
 
 [workspace.dependencies]
-tokio = { version = "1", features = ["rt", "macros", "sync", "time", "rt-multi-thread"] }
+tokio = { version = "1", features = [
+    "rt",
+    "macros",
+    "sync",
+    "time",
+    "rt-multi-thread",
+] }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 uuid = { version = "1.0", features = ["v4", "serde"] }
@@ -26,9 +31,13 @@ realfft = "3.3"
 ringbuf = "0.4"
 directories = "5.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "fmt",
+    "ansi",
+] }
 console-subscriber = "0.3"
 regex = "1"
 wgpu = { version = "0.19", features = ["spirv"] }
 bytemuck = { version = "1.16", features = ["derive"] }
-iced = { version = "0.14", features = ["wgpu"] }
+iced = { version = "0.14", features = ["wgpu", "tokio"] }

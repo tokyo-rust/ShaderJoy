@@ -28,14 +28,16 @@ api_key = "${GOOGLE_API_KEY}"
 
 [grid_size]
 # Grid dimensions (rows × cols)
-rows = 3
-cols = 3
+rows = 1
+cols = 2
 
 [generation]
+# Number of nonce words to use for generation
+nonce_word_count = 10
 # Number of concurrent generation tasks (over-subscribe 3-4x grid size)
 concurrency = 12
 # Maximum retry attempts per slot if validation fails
-max_retries = 3
+max_retries = 1
 # Initial backoff delay in milliseconds
 backoff_base_ms = 1000
 # Exponential backoff multiplier
