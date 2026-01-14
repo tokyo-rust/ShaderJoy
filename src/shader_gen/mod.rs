@@ -3,13 +3,13 @@ pub mod error;
 
 use config::{LlmProvider, ShaderGenConfig};
 use error::{Result, ShaderGenError};
-use std::time::Instant;
 use llm::{
     builder::{LLMBackend, LLMBuilder},
     chat::ChatMessage,
 };
 use naga::front::wgsl;
 use naga::valid::{Capabilities, ValidationFlags, Validator};
+use std::time::Instant;
 
 pub async fn generate_with_retry(
     config: &ShaderGenConfig,
@@ -86,7 +86,11 @@ pub async fn generate(config: &ShaderGenConfig, words: &[String]) -> Result<Stri
         .chat(&messages)
         .await
         .map_err(|e| ShaderGenError::LlmError(e.to_string()))?;
-    println!("Received response from LLM for words: {:?} (took {:.2?})", words, start.elapsed());
+    println!(
+        "Received response from LLM for words: {:?} (took {:.2?})",
+        words,
+        start.elapsed()
+    );
 
     let text = response
         .text()
