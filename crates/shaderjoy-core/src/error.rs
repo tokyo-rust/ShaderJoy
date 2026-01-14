@@ -37,8 +37,11 @@ pub enum LlmError {
     #[error("Request timeout after {timeout_seconds} seconds")]
     Timeout { timeout_seconds: u64 },
 
-    #[error("Invalid response: {message}")]
-    InvalidResponse { message: String },
+    #[error("Invalid response: {message}\nResponse: {response:?}")]
+    InvalidResponse {
+        message: String,
+        response: Option<String>,
+    },
 
     #[error("Model not available: {model}")]
     ModelNotAvailable { model: String },

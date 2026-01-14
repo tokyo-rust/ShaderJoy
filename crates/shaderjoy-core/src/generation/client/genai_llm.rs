@@ -37,7 +37,7 @@ impl GenaiLlmClient {
                 // TODO NOW consider making these configurable
                 // temperature: Some(0.9f64),
                 // top_p: Some(0.9f64),
-                max_tokens: Some(2000),
+                max_tokens: Some(50_000),
                 ..Default::default()
             })
             .build();
@@ -116,10 +116,12 @@ impl LlmClient for GenaiLlmClient {
                 .first_text()
                 .ok_or_else(|| LlmError::InvalidResponse {
                     message: "No text in response".to_string(),
+                    response: None,
                 })?;
 
         let wgsl_code = extract_wgsl(response_text).ok_or_else(|| LlmError::InvalidResponse {
             message: "Could not extract WGSL code from response".to_string(),
+            response: response_text.to_string().into(),
         })?;
 
         validate_wgsl(&wgsl_code)?;
