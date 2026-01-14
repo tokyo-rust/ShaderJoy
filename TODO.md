@@ -6,12 +6,11 @@
 
 ### Now
 
-* TODO NOW pass
-* Make shader treat the box it is in as the whole "screen"
+* Evolve?
 * Mouse/Uniforms not sent
 * Error handling and over requesting.
-* use default shader and clean stuff up.
 * Is audio being actually passed yet? Check tasks if it is next before trying to fix.
+* "Selected cell" should not say index but grid position
 * Settings dialog not implemented, see if this is in next phase.
 * Save dialog not implemented correctly, it should save the entire shader Specimen lineage, check if this is in next phase.
 

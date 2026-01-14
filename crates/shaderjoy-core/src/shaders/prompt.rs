@@ -46,16 +46,23 @@ OPTIONALLY ACCESS THE SPECTRUM IN YOUR SHADER:
 REQUIRED ENTRY POINT:
 ```wgsl
 @fragment
-fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
-    // Your shader code here
-    // Use uniforms.resolution for screen dimensions
-    // Use other uniforms optionally for animation
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    // in.uv is [0,1] normalized to the viewport
+    // Use uniforms.resolution for aspect ratio correction
+}
+```
+
+Note that VertexOutput should be of the form:
+```wgsl
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,  // Normalized [0,1] viewport coordinates
 }
 ```
 
 BEST PRACTICES:
-- Normalize coordinates: let uv = frag_coord.xy / uniforms.resolution;
-- Center coordinates: let uv = (frag_coord.xy - 0.5 * uniforms.resolution) / min(uniforms.resolution.x, uniforms.resolution.y);
+- Center and aspect-correct: let aspect = uniforms.resolution.x / uniforms.resolution.y; let uv = (in.uv - 0.5) * vec2<f32>(aspect, 1.0);
+- Simple normalized: let uv = in.uv; (already [0,1])
 - Use other uniforms optionally for animation
 
 OUTPUT FORMAT:

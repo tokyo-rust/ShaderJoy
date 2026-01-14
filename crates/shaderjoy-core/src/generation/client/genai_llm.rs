@@ -34,7 +34,7 @@ impl GenaiLlmClient {
 
         let client = Client::builder()
             .with_chat_options(ChatOptions {
-                // TODO NOW consider making these configurable
+                // TODO consider making these configurable
                 // temperature: Some(0.9f64),
                 // top_p: Some(0.9f64),
                 max_tokens: Some(50_000),

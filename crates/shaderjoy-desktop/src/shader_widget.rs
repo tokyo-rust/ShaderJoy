@@ -151,7 +151,6 @@ impl iced_shader::Primitive for ShaderCellPrimitive {
         });
 
         pass.set_pipeline(&cell_pipeline);
-        // TODO NOW can i make the box the entire viewport if i know the coordinates?
         pass.set_viewport(
             clip_bounds.x as f32,
             clip_bounds.y as f32,
@@ -221,7 +220,11 @@ impl ShaderCellPipeline {
         })
     }
 
-    fn compile_shader_for_cache(&self, wgsl_code: &str, shader_code_id: Uuid) -> Result<(), String> {
+    fn compile_shader_for_cache(
+        &self,
+        wgsl_code: &str,
+        shader_code_id: Uuid,
+    ) -> Result<(), String> {
         let combined_shader = format!("{}\n{}", VERTEX_SHADER, wgsl_code);
 
         let mut cache = self.pipeline_cache.lock().unwrap();

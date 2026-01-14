@@ -20,11 +20,18 @@ struct AudioUniforms {
     spectrum: array<vec4<f32>, 16>,
 }
 
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+}
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 @fragment
-fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
-    let uv = (frag_coord.xy - 0.5 * uniforms.resolution) / min(uniforms.resolution.x, uniforms.resolution.y);
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    // in.uv is [0,1] normalized to viewport, center it to [-0.5, 0.5] and apply aspect correction
+    let aspect = uniforms.resolution.x / uniforms.resolution.y;
+    let uv = (in.uv - 0.5) * vec2<f32>(aspect, 1.0);
     
     let col = 0.5 + 0.5 * cos(uniforms.time + vec3<f32>(uv.x, uv.y, uv.x + uv.y) + vec3<f32>(0.0, 2.0, 4.0));
     
@@ -34,12 +41,16 @@ fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
 
 pub const VERTEX_SHADER: &str = r#"
 @vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var positions = array<vec2<f32>, 3>(
         vec2<f32>(-1.0, -1.0),
         vec2<f32>(3.0, -1.0),
         vec2<f32>(-1.0, 3.0)
     );
-    return vec4<f32>(positions[vertex_index], 0.0, 1.0);
+    var out: VertexOutput;
+    out.position = vec4<f32>(positions[vertex_index], 0.0, 1.0);
+    // Convert from clip space [-1,1] to UV space [0,1]
+    out.uv = positions[vertex_index] * 0.5 + 0.5;
+    return out;
 }
 "#;
